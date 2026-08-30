@@ -1,4 +1,5 @@
 # WOP Web Tools
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 浏览器端 WOP 商户工作台：密钥生成 · 报文联调 · 离线验证。
 
