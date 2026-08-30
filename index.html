@@ -1472,6 +1472,73 @@ async function runSelftest() {
     else fail('formatRules/' + r.id, actual, r.expect);
   }
 
+  // spec:WF7 —— 正路径：原始报文解析（起始行/头/body）+ 验证区回填
+  {
+    const wf7Wire = [
+      'POST /gateway/logistics.waybill.sync HTTP/1.1',
+      'x-wop-appkey: demo_app_key',
+      'x-wop-content-digest: sha-256 ' + 'a'.repeat(64),
+      'x-wop-encrypt: L2;dek=AbC123-_',
+      'x-wop-nonce: 1a2b3c4d5e6f7890',
+      'x-wop-timestamp: 1756600000000',
+      'x-wop-sign: WOP-RSA3072-SHA256 v1/1800/x-wop-content-digest;x-wop-encrypt;x-wop-nonce;x-wop-timestamp/sig123',
+      '',
+      '{"orderId":"W20260827001"}'
+    ].join('\n');
+    const pw = parseWireMessage(wf7Wire);
+    if (pw.start.startsWith('POST /gateway') && pw.headers['x-wop-sign'] && pw.body.includes('orderId') && !pw.errors.length)
+      ok('WF7 报文解析', '起始行/头/body 提取，无告警');
+    else fail('WF7 报文解析', JSON.stringify(pw).slice(0, 120), '起始行+头+body 正确');
+    $('wire-paste').value = wf7Wire;
+    fillVerifyFromWire();
+    if ($('v-nonce').value === '1a2b3c4d5e6f7890' && $('v-ts').value === '1756600000000' && $('v-body').value.includes('orderId') && $('v-sign').value.startsWith('WOP-'))
+      ok('WF7 回填验证区', '头/体字段自动填充');
+    else fail('WF7 回填验证区', '字段未回填', 'nonce/ts/body/sign 回填');
+  }
+
+  // spec:WF7 —— 负路径：缺必填头 / 非法 digest / 非法时间戳 逐项告警
+  {
+    $('wire-paste').value = ['HTTP/1.1 200 OK', 'x-wop-content-digest: sha-256 XYZ_not_hex', 'x-wop-nonce: n1', 'x-wop-timestamp: 123', '', '{}'].join('\n');
+    fillVerifyFromWire();
+    const li = [...document.querySelectorAll('#wire-steps li')].map(l => l.textContent);
+    if (li.some(t => t.includes('缺失必填头：x-wop-sign')) && li.some(t => t.includes('格式非法')) && li.some(t => t.includes('毫秒时间戳')))
+      ok('WF7 缺头/格式告警', '缺失必填头 + digest 格式 + 时间戳 3 项提示');
+    else fail('WF7 缺头/格式告警', JSON.stringify(li), '3 项负路径告警');
+  }
+
+  // spec:WF8 —— 字典完整性：62 码全量（公共契约，分类/对外语义冻结）
+  {
+    const n = Object.keys(WOP_ERRORS).length;
+    if (n === 62) ok('WF8 字典', '62 码全量（OP_GW_ 枚举对齐）');
+    else fail('WF8 字典', n, '62');
+  }
+
+  // spec:WF8 —— 命中分支：信封→诊断（分类/处置/traceId）
+  {
+    $('err-json').value = '{"code":"OP_GW_1022","msg":"签名验证失败","traceId":"tk-0001"}';
+    diagnoseError();
+    const badge = $('err-out').querySelector('.badge');
+    const rows = [...$('err-out').querySelectorAll('table tr')].map(tr => tr.textContent);
+    if (badge && badge.textContent.includes('字典命中') && rows.some(r => r.includes('鉴权')) && rows.some(r => r.includes('tk-0001')))
+      ok('WF8 命中诊断', '1022→鉴权分类 + 处置 + traceId 引导');
+    else fail('WF8 命中诊断', badge ? badge.textContent : '无 badge', '字典命中+分类+traceId');
+  }
+
+  // spec:WF8 —— 未知码分支：不在字典 → 明确提示，不静默
+  {
+    $('err-json').value = '{"code":"OP_GW_9999"}';
+    diagnoseError();
+    const badge = $('err-out').querySelector('.badge');
+    if (badge && badge.textContent.includes('未知码')) ok('WF8 未知码分支', '字典外明确提示');
+    else fail('WF8 未知码分支', badge ? badge.textContent : '无 badge', '未知码提示');
+  }
+
+  // 清理 WF7/WF8 渲染区：断言渲染内容不得污染后续 S1/S2 源码自扫描
+  $('err-out').innerHTML = '';
+  $('wire-steps').innerHTML = '';
+  $('wire-paste').value = '';
+  $('err-json').value = '';
+
   // spec:S1/S2 —— 否定式条款：零外发 + 不落盘（源码自扫描）
   // 扫描范围剔除本函数自身源码（toString 后替换），使描述性注释/文案不误伤；禁词另以拼接书写双保险
   const scan = scanSelfForBanned();

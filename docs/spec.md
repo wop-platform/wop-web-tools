@@ -130,8 +130,8 @@
 | WF6 aesgcm | `// spec:WF6.aesgcm` | 密文\|\|tag 字节级 | 正向量 |
 | WF6 dek | `// spec:WF6.dek` | DEK 三段式 + OAEP 解包 + MGF1 陷阱拒绝 | 正/负向量 |
 | WF6 formatRules | `// spec:WF6.formatRules` | 11 条：族比对推导 accept/reject | 正/负向量 |
-| WF7 粘贴解析 | `// spec:WF7`（fillVerifyFromWire） | 报文→字段填充 + 缺头/格式诊断（digest/L2;dek=/ts） | 功能+否定式 |
-| WF8 错误诊断 | `// spec:WF8`（diagnoseError） | 62 码字典命中/未知码分类/覆盖码/信封与报文识别 | 功能+否定式 |
+| WF7 粘贴解析 | `// spec:WF7`（runSelftest：正/负路径断言） | 解析→头/body 提取+回填；缺头/digest/ts 告警 | 功能+否定式 |
+| WF8 错误诊断 | `// spec:WF8`（runSelftest：字典/命中/未知分支断言） | 62 码计数+1022 命中+9999 未知分支 | 功能+否定式 |
 | S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
 | S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
 | G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
