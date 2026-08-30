@@ -150,6 +150,7 @@
   <nav class="tabbar" id="tabbar">
     <button data-tab="keygen" class="active">密钥生成</button>
     <button data-tab="request">报文联调</button>
+    <button data-tab="selftest">向量自测</button>
   </nav>
 
   <div class="tabpage" id="tab-keygen">
@@ -165,7 +166,7 @@
         <label><input type="radio" name="bits" value="4096">
           <span><b>4096 位</b><small>对应安全套件 WOP-RSA4096-SHA256</small></span></label>
       </div>
-      <p class="hint" style="margin:8px 0 0">注：如被要求生成「3074 位」密钥，即为笔误——RSA 不存在 3074 位，平台仅支持 3072 / 4096（OP_GW_1014），请选择 3072。</p>
+            <p class="hint" style="margin:8px 0 0">注：如被要求生成「3074 位密钥」，即为笔误——RSA 不存在 3074 位，请选择 3072。平台已冻结三套件（WOP-RSA3072-SHA256 / WOP-RSA4096-SHA256 / WOP-SM2-SM3，见 wop-specs）；本工具首版支持 RSA 两套件，SM2-SM3 列入路线图。</p>
     </fieldset>
     <div class="selects">
       <div>
@@ -292,7 +293,7 @@
 
       <section class="card">
         <h2>3. 验证平台报文（同步响应 / 异步回调）</h2>
-        <p class="inline-note">粘贴平台侧报文（网关同步响应，或平台主动发起的异步回调）的头与体，逐项复核摘要 / 验签 / 解密。两类报文处理逻辑一致，仅 canonical 的 URI 不同：响应取网关 API 路径，回调取回调 URL 的 path。联调模式下也可直接本地模拟闭环。<br><b style="color:#b45309">⚠ 回调协议按同步响应出站语义（平台私钥 SHA256withRSA 加签 + 商户公钥包裹 DEK）推演，网关回调实现尚未冻结，最终以平台接入文档为准。</b></p>
+        <p class="inline-note">粘贴平台侧报文（网关同步响应，或平台主动发起的异步回调）的头与体，逐项复核验签 / 摘要 / 解密。两类报文处理逻辑一致，仅 canonical 的 URI 不同：响应取网关 API 路径，回调取回调 URL 的 path。联调模式下也可直接本地模拟闭环。<br><b>校验顺序对齐 wop-sdk-spec v1.0-ratified（F6）：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密。</b></p>
         <div class="grid3" style="margin-top:8px">
           <div class="field"><label for="v-type">报文类型</label>
             <select id="v-type">
@@ -339,6 +340,21 @@
 
     </div>
   </div><!-- /tab-request -->
+  <div class="tabpage" id="tab-selftest" hidden>
+    <section class="card">
+      <h2>黄金向量自测</h2>
+      <p class="inline-note">内置 wop-specs 黄金向量（fixture 只读副本，禁手改），一键跑字节级断言：正向量（摘要 / RSA 签名 / AES-GCM 密文 / DEK 载荷 / OAEP 解包）必须一致，负向量（跨族 / 格式错误 / 尾位非规范 / MGF1 陷阱）必须拒绝。全部通过才提示「与官方规格对齐」。</p>
+      <div class="actions">
+        <button class="primary" id="run-selftest">运行自测</button>
+        <span id="selftest-status" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      <div class="badge" id="selftest-banner"></div>
+    </section>
+    <section class="card">
+      <h2>断言结果</h2>
+      <ul class="steps" id="selftest-steps"></ul>
+    </section>
+  </div><!-- /tab-selftest -->
 </div>
 <div class="toast" id="toast"></div>
 
@@ -642,6 +658,27 @@ async function sha256Hex(text) {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text == null ? '' : text)));
   return [...d].map(b => b.toString(16).padStart(2, '0')).join('');
 }
+// 解析 x-wop-content-digest 头：<alg> <恰一空格> <64 位小写 hex>（D2/F5 语义）
+// 返回 { ok:true, alg, hex } 或 { ok:false }；与向量自测（formatRules）共用同一实现
+function parseDigestHeader(header) {
+  const m = /^(sha-256|sm3) ([0-9a-f]{64})$/.exec(String(header || '').trim());
+  return m ? { ok: true, alg: m[1], hex: m[2] } : { ok: false };
+}
+
+// base64url 严格性校验（F6/D10 附录）：无填充、字母表、尾字符低 4/2 位须为零
+// 与 Go RawURLEncoding.Strict() 对拍一致；页面业务解析保持宽容（容错粘贴），格式判定用本函数
+const B64U_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+function strictB64urlOk(s) {
+  const t = String(s || '').trim();
+  if (!t || t.includes('=') || !/^[A-Za-z0-9_-]+$/.test(t)) return false;
+  const rem = t.length % 4;
+  if (rem === 1) return false; // 不可能出现的长度
+  const last = B64U_ALPHABET.indexOf(t.charAt(t.length - 1));
+  if (last < 0) return false;
+  if (rem === 2) return (last & 0x0f) === 0; // 尾字符低 4 位须为零
+  if (rem === 3) return (last & 0x03) === 0; // 尾字符低 2 位须为零
+  return true;
+}
 function randBytes(n) { return crypto.getRandomValues(new Uint8Array(n)); }
 function nonce32() { return [...randBytes(16)].map(b => b.toString(16).padStart(2, '0')).join(''); }
 
@@ -812,15 +849,7 @@ async function verifyResponse() {
     const vSha = $('v-sha').value.trim();
     if (!vSign) throw new Error('x-wop-sign 未填写');
 
-    // step1 摘要复核
-    const computed = await sha256Hex(body);
-    const dm = vSha.match(/^sha-256 ([0-9a-f]{64})$/);
-    const shaOk = !!dm && dm[1] === computed;
-    steps.push({ ok: shaOk, text: shaOk ? '摘要复核：sha-256(body) 与 x-wop-content-digest 一致'
-      : '摘要复核失败：header=' + (vSha || '空') + '，实际 sha-256=' + computed
-        + '（格式须为 sha-256 + 恰一空格 + 64 位小写 hex；body 可能被篡改或粘贴不完整）' });
-
-    // step2 解析签名头
+    // step1 解析签名头（F6 顺序：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密）
     const sp = vSign.indexOf(' ');
     if (sp <= 0) throw new Error('x-wop-sign 缺少 securityReq 与 authString 的空格分隔');
     const securityReq = vSign.slice(0, sp);
@@ -828,7 +857,7 @@ async function verifyResponse() {
     if (seg.length !== 4) throw new Error('x-wop-sign 应为 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature>');
     steps.push({ ok: true, text: '签名头解析：套件 ' + securityReq + '，authString ' + seg[0] + '/' + seg[1] });
 
-    // step3 重建 canonical 并用平台公钥验签
+    // step2 重建 canonical 并用平台公钥验签
     const signedNames = seg[2].split(';').map(s => s.trim()).filter(Boolean);
     const avail = { 'x-wop-nonce': vNonce, 'x-wop-timestamp': vTs, 'x-wop-content-digest': vSha, 'x-wop-encrypt': vEncrypt };
     const hmap = {};
@@ -843,6 +872,14 @@ async function verifyResponse() {
     const sigOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verKey, bytesFromB64url(seg[3]), new TextEncoder().encode(canonical));
     steps.push({ ok: sigOk, text: sigOk ? '验签通过：平台公钥 SHA256withRSA 校验' + ($('v-type').value === 'callback' ? '回调' : '响应') + '签名'
       : '验签失败：检查平台公钥是否匹配、报文类型/回调 URL 是否正确（canonical 的 URI 取自其 path）、头值是否复制完整' });
+
+    // step3 摘要复核（F6：验签之后）
+    const computed = await sha256Hex(body);
+    const dh = parseDigestHeader(vSha);
+    const shaOk = dh.ok && dh.hex === computed;
+    steps.push({ ok: shaOk, text: shaOk ? '摘要复核：sha-256(body) 与 x-wop-content-digest 一致'
+      : '摘要复核失败：header=' + (vSha || '空') + '，实际 sha-256=' + computed
+        + '（格式须为 <sha-256|sm3> + 恰一空格 + 64 位小写 hex；body 可能被篡改或粘贴不完整）' });
 
     // step4 L2 解密
     if (vEncrypt.toUpperCase().startsWith('L2')) {
@@ -946,6 +983,7 @@ document.querySelectorAll('#tabbar button').forEach(btn => {
     document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('active', b === btn));
     $('tab-keygen').hidden = btn.dataset.tab !== 'keygen';
     $('tab-request').hidden = btn.dataset.tab !== 'request';
+    $('tab-selftest').hidden = btn.dataset.tab !== 'selftest';
   });
 });
 
@@ -995,6 +1033,237 @@ $('v-type').addEventListener('change', () => {
   $('cb-sample-wrap').hidden = !isCb;
 });
 
+
+/* ============================================================
+ * 黄金向量 fixture —— 只读副本，禁手改（spec G6 / WF6）
+ * 来源：wop-specs/crypto/crypto-vectors.json · 生成：2026-08-28 · TEST-ONLY 密钥
+ * 语义锚：wop-sdk-spec v1.0-ratified F8（字节级向量合规）
+ * 变更流程：真源更新 → 整体替换本块并 bump 版本声明，禁止手工改单个值
+ * ============================================================ */
+const WOP_VECTORS = {
+ "meta": {
+  "generated": "2026-08-28",
+  "testOnly": true,
+  "source": "wop-specs/crypto/crypto-vectors.json"
+ },
+ "message": "WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.",
+ "dekPlaintext": "AES-256-GCM$AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8$EBESExQVFhcYGRob",
+ "keys": {
+  "rsa3072": {
+   "priv": "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",
+   "pub": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAtXJuxrDjAOOFB7P2Mo0P9+Dp/gYZauIHNKxDazym3NDVe510+F+0XNK3jfL0JY5MqCCTpEybRl0hJrV1sPWNbReug9N8FSZ8N9qyMSC/FTlXA8X9yMDfwYMWsCudh6KkHVeFUaKj8uqeEVpuOLuV061jNzbOkPw3Os8xH1c5tnLTYTFyPY5teX+YkX+6cz7Bspmtv2eY1+6/SmoYLmwTxwuN07XKGlxMlQ8uDaLwHnoy0svHT+yYp7roa+nGZ0HxLjk2k/XNNc0ipWNDhjpxcpAK3YcyNViyCOSrgu3KEiGwpNx5UpkrARIo7V6fqbi2Qg+rX+AxtV6ccbfMXe2J2HBqn+8R0MfuNRvEulT0DZetL40huJQ0UGbDw+K1oK2BSAvz2gWe1Tkm0kfcYFYm9pjJV6MzUnTeRPxuZfHHzG/JZqO/5krkt3ZlQmPb3M8xu8peUMr9KFMIJ1fJEH8cp/+NkrZIDtdAv5DAofu2TAzekFxDQ3HcwIgkLWTQcGkjAgMBAAE="
+  },
+  "rsa4096": {
+   "priv": "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",
+   "pub": "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEArKDBTJf3NwXgD3LCGsU65/zgfjT9fnZgpGlgXvON+hVJTPPdZiPuqchnkp1nZPvxa5BTVhHnsTwuTG/AAybGPklOZSmvjw6p2o6jqZe1DAB3zgTLBBCLpsZmnvEeuDBwgoR4ETbC7bDSpAPut8qJP6Vp4Os6bfe7yGzntYZmQypK4MM3NEJEgXMzZlCZ+Oj/XpDa6HZ2PqcOjC0DwWIV13+jUs9jsqVG9yVrSxZgodm+tqRB+7/R1U5z+yIQSyURUmAFYBx6L1ag8qQE96cD27tA9hDeI+Hw1XbXQTTgIBGi/L9h2bbMfVnvBUGSwfdLMf4DOEE6G2bSiSX16H8exkVqavX2A4SXdd29TYMbO4UMkcRPGy/kP6HpUhD//9+jC08yVhueg1SwSA8J2QN4GAD0J5S57eRglKFueoFxyRsvLLF+f917MqXUmbZNFrSdWINdHKgpI8ft3+Xb4knAIXi68mtfatAeGkG4GUwJaym4BCu4hlXY4r5ec5/2YZf0ddV4ms44qwakdZ637HmdshZG0E2GsU9rH868ssEjzqLEck7m6MlKgVdllwXr0VhRPtJFMGCFc5PvVSKpX2DVhPCTAgYIVqrjtewdzGMYEQz8e8gpE8THp/sAmFhm1gXQiyhD0MvPuIDaSys7yS3OOJ7mUVeMXzuQw88jQ8BcR7MCAwEAAQ=="
+  }
+ },
+ "digest": {
+  "id": "digest-sha256",
+  "algorithm": "SHA-256",
+  "input": "WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.",
+  "expectedHex": "4cf7ab3bcefc20c8d6116d4ce9a3fdfb0d60ba5391472d7bffcf159da9e033ca",
+  "expectedHeader": "sha-256 4cf7ab3bcefc20c8d6116d4ce9a3fdfb0d60ba5391472d7bffcf159da9e033ca"
+ },
+ "sign": {
+  "rsa3072": {
+   "id": "rsa3072-sign",
+   "key": "rsa3072",
+   "message": "WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.",
+   "expectedSigB64u": "ESw5IVyqo3e2gyDJ5nPlBXuda0zm12x-estvnYC7noCcG4Xy4v-obI_U2h44NcDCN-LQBZDpWiSG_mZZfTrpLAkqwpoxuH3aLTPB8WqhgG-O3544ggMaEeSwQv-GOmJJ6mvnbY6_IOfyM85gRFdFo2cU3R1Nl-k-c8yzbBI39xRPJEzAwcEr7EVqMKuZWeaVXQEHSIKLOmRg21v2YT54K3VYpNOsKZtwLTKuBcM5HaJ8Q2k0kZez2cyGeKYW5CeRs2lXgZfjksQ6MmmjmbLwWhMeLD0dCek47BGNpfj2W2fIwFyROf-u66cW8GzroKYuTC6k3rAmfa1r3yHRet0iCzbwNhLn67BI1TLZmhTGYkUnE2UpMTKU5eLzkntC_sIDtmg0m9b90igvIMkB6ombA9HicqZJaqsV6vaj1JhISkc0lNPnwfgy4z16JzVyQjEEzT5sm0B1bCH_sp--XIVpy1JZ5FKMItSfRhxfkAzngO6vaO8b5gvYCkSaSj7yfaxg",
+   "sigLenBytes": 384,
+   "b64uLen": 512
+  },
+  "rsa4096": {
+   "id": "rsa4096-sign",
+   "key": "rsa4096",
+   "message": "WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.",
+   "expectedSigB64u": "J4b0ZA0dEXUYFSNOrzJ9ECh3d6osSisku4mb2wqNKT6550be8xfyNFd3YT1mua9hc6fsIt1ShyRypzfog8Cl-It7hxDuY9pU7bZC_r3LLHzMl5G_K21HJK1acSCP-A_vDMIbalIc0PbQFNea_REFqEUsxFw4Oj05LHba57Q1xqe2kSkfkhD7RnNBMCo1X4tOKoPkiw_cDiBxBWQ7kW6BcCngQULWHqbcg7u34ednNluEO8FrstxrhroPWo65XAYdW-W8BDevdX0U8B4p0PxMegV4HRytHJhmJMr3LCbffhM-qZfQo6eh4nZ-bhQQSdq3AxzxBzVeb9UbAU9KSXodreGGuexW_3DOH2lZU3k2hX7Lpac9U_1jTnwzzBxVLyfFoUZBzH94EDdAKUCSJ3RgIRleg_XpJgziH2vFSNyNV9p1RRCAE_uDLvEL_z9o49xqTD86w0pzNsd0MuO6m8EeqqVjWd9r0A9tcPeqJdTmduKopdcEhlKdqJUILhvxISFcyjJXezLYh2ZcYCgqUDraL_bSfK6VuYXSaMDMkn7b5SBbw5Rvw08ElysqS6W9m-pgNgrPq9C4vlQi01KhmBl1IuAy8nzZh45OsDGGyU_ZN7XyaOT9ACbiaGPNyP19zwkbfqlZfZx7_8qv2hIUpRDBO2bVjTL3RkrutWoflx5nGg8",
+   "sigLenBytes": 512,
+   "b64uLen": 683
+  }
+ },
+ "aesgcm": {
+  "id": "aesgcm-encrypt",
+  "algorithm": "AES-256-GCM",
+  "keyB64u": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "ivB64u": "EBESExQVFhcYGRob",
+  "plaintextB64u": "V09QIOi3qOivreiogOa1i-ivleWQkemHjyAyMDI2LTA4LTI4IOKAlCBUaGUgcXVpY2sgYnJvd24gZm94IGp1bXBzIG92ZXIgdGhlIGxhenkgZG9nLg",
+  "cipherTagB64u": "KrHINqF-kltl2OC1j5_c2D__2-uLU742aNnQV2xieetoxGU71UTue15i-jSq6WZycNdnEZHkLpyceFVJ0_3RBnWLH0w_23kUGehQ3rSgkscd3f3KSCO_iP-Xh7vOUfauwj3kNu8",
+  "format": "ciphertext||tag 尾拼（F4），tag 128bit"
+ },
+ "dek": {
+  "id": "dek-rsa",
+  "alg": "AES-256-GCM",
+  "keyB64u": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "ivB64u": "EBESExQVFhcYGRob",
+  "expected": "AES-256-GCM$AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8$EBESExQVFhcYGRob"
+ },
+ "oaepUnwrap": {
+  "id": "oaep3072-unwrap",
+  "key": "rsa3072",
+  "cipherB64u": "jc29n4KH_gmV_3FmM31SpxTXUXsh8Ryi1_7YPT8hm0urytrCnTaKBtcJqMU2KWnXIBkviFJC0F22IM0J8QveqiYsaUrfAo0cCVC13J5EBhxxoM26HYNedUl1Pl95IYirADAKurx5hNxCVWX7uaEj8ZEXo13n6y9NYN3IQi1Xy-iZM3fjHX9CjufeY8IFYPgqZ2MXnSPEN88UkRehGzMVfNYcbuXdBSSfVUadO0o41_ESduouQOzfgXhSQS8R1e3koB0SNvy0zhDOxeSo_Ld6F2FmePJQwquTUF_c0M5OMdZxb6KoH0RTtSX8iP8Auq_mHZ0MlPD1OomE97LHusA5XktGGouj7o20QHgPv8RnGwv1cpyztp6x8b8SnIBccvFcIaczZy6_qbdxjGbTEUPR31T4ucxRMicm0tp4Kp6rgq4YGzPT9p9l9fvFtLRhm9sHWZQUwH-eC1wdWjtrxi2JTmVaTIS5ubPhJ2ucBi7Jaa8BkgEPmbjl1-oPSBV46FHt",
+  "expectedPlaintext": "AES-256-GCM$AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8$EBESExQVFhcYGRob",
+  "params": "OAEP(SHA-256, MGF1-SHA-256, empty label) — 显式参数化（F2）",
+  "expect": "unwrap-equals-plaintext"
+ },
+ "oaepTrap": {
+  "id": "oaep3072-mgf1sha1-trap",
+  "key": "rsa3072",
+  "cipherB64u": "Y9WE9bvvUkCCcA7qREvKpyBEcpxO5fC78IR_YQyBJIu1wX-OaNPz6oxWBEh2-vQmp_csWIR5ZVBuOK4Jm4c7jmFTZY787EOIGwdn8iTvY2XvBrnz0yzWWhDvm1lvK1INSXa2HD3D2UsRcZyqniZ3fHAD8jv2127l85-fGZuk2a3QjsmTltKcNePDgwVGDTEVsH1jpSDrt6ApVISjVXjOlrJoc9740Jac44SMkFeMgDNADQvUNZSpYj6TLeDbwqwxjQ287aQZnYuuQ5hhjY-qiOWf1X8j7w99wwwp8_Luuv5A0sOxrzlL_hIu0yK6QqwSlee8oiMHTI0J-P7FgQ-VGyaHvd7Q8nygsiMokXkhmUf2a9n-vwWc_3qGL3ny3yCjK996AwkGLieMDZ9R1TkckdL8Cp9usGHeWFrzaECwsmDpqiBdNblPU7wKW9SZiwVEeJW_i7gPvdnPzOlWccETJPW0JW6mFWOz2rYYqK-EF-qa36qyAGGP4zvyasZRvqxD",
+  "paramsUsed": "OAEP(SHA-256, MGF1-SHA-1, empty label)",
+  "expect": "reject",
+  "note": "F2 钉子：以错误 MGF1 包装的密文，用规格参数（双 SHA-256）解包必须失败"
+ },
+ "formatRules": [
+  {
+   "id": "header-rsa-ok",
+   "value": "sha-256 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+   "expect": "accept",
+   "suite": "WOP-RSA3072-SHA256"
+  },
+  {
+   "id": "header-crossfamily",
+   "value": "sm3 23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+   "expect": "reject",
+   "suite": "WOP-RSA3072-SHA256",
+   "note": "I5 跨族"
+  },
+  {
+   "id": "header-double-space",
+   "value": "sha-256  23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+   "expect": "reject",
+   "note": "D2 恰一空格"
+  },
+  {
+   "id": "header-uppercase-hex",
+   "value": "sha-256 23592263765CF506D07CC8614C09067E6DE38E64C53E5B672C022532D01737CF",
+   "expect": "reject",
+   "note": "F5 小写"
+  },
+  {
+   "id": "header-wrong-hex-len",
+   "value": "sha-256 3592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf",
+   "expect": "reject",
+   "note": "64 字符"
+  },
+  {
+   "id": "b64url-with-padding",
+   "value": "abc=",
+   "expect": "reject",
+   "note": "F6 严格无填充"
+  },
+  {
+   "id": "b64url-illegal-char",
+   "value": "ab+c",
+   "expect": "reject",
+   "note": "F6 字母表"
+  },
+  {
+   "id": "b64url-trailing-bits-noncanonical-2",
+   "value": "aE",
+   "expect": "reject",
+   "note": "F6/D10 严格性补钉：len%4==2 时尾字符低 4 位须为零（E=4）——.NET FromBase64String 宽容收下，须显式拒绝（与 Go RawURLEncoding.Strict() 对拍一致）"
+  },
+  {
+   "id": "b64url-trailing-bits-canonical-2",
+   "value": "AA",
+   "expect": "accept",
+   "note": "len%4==2 canonical（A=0，低 4 位零）→ 1 字节 0x00"
+  },
+  {
+   "id": "b64url-trailing-bits-noncanonical-3",
+   "value": "TWF",
+   "expect": "reject",
+   "note": "len%4==3 时尾字符低 2 位须为零（F=5）——TWF 是 'Ma' 的非规范 3 字符形式"
+  },
+  {
+   "id": "b64url-trailing-bits-canonical-3",
+   "value": "TWE",
+   "expect": "accept",
+   "note": "len%4==3 canonical（E=4，低 2 位零）——TWE 是 'Ma' 的规范 3 字符形式 → 2 字节 0x4D 0x61"
+  }
+ ]
+};
+
+async function runSelftest() {
+  const steps = [];
+  const fail = (id, got, want) => steps.push({ ok: false, text: id + '：不匹配。期望 ' + want + '，实际 ' + got });
+  const ok = (id, extra) => steps.push({ ok: true, text: id + (extra ? '：' + extra : '') });
+  const V = WOP_VECTORS;
+
+  const hex = await sha256Hex(V.message);
+  if (hex === V.digest.expectedHex) ok('digest-sha256', V.digest.algorithm + ' 64 位 hex 一致');
+  else fail('digest-sha256', hex, V.digest.expectedHex);
+
+  const hd = parseDigestHeader(V.digest.expectedHeader);
+  if (hd.ok && hd.alg === 'sha-256' && hd.hex === V.digest.expectedHex) ok('digest 头格式', 'sha-256 + 恰一空格 + 64 位小写 hex');
+  else fail('digest 头格式', JSON.stringify(hd), V.digest.expectedHeader);
+
+  for (const id of ['rsa3072', 'rsa4096']) {
+    const s = V.sign[id];
+    const key = await importPrivSign(bytesFromB64url(V.keys[id].priv));
+    const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(s.message)));
+    const sigB64u = b64urlFromBytes(sig);
+    if (sigB64u === s.expectedSigB64u) ok(s.id, '签名 ' + sig.length + ' 字节与黄金向量一致');
+    else fail(s.id, sigB64u, s.expectedSigB64u);
+  }
+
+  const aesKey = await crypto.subtle.importKey('raw', bytesFromB64url(V.aesgcm.keyB64u), 'AES-GCM', false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: bytesFromB64url(V.aesgcm.ivB64u), tagLength: 128 },
+    aesKey, bytesFromB64url(V.aesgcm.plaintextB64u)));
+  const ctB64u = b64urlFromBytes(ct);
+  if (ctB64u === V.aesgcm.cipherTagB64u) ok('aesgcm-encrypt', '密文||tag ' + ct.length + ' 字节与黄金向量一致');
+  else fail('aesgcm-encrypt', ctB64u, V.aesgcm.cipherTagB64u);
+
+  const dek = V.dek.alg + '$' + V.dek.keyB64u + '$' + V.dek.ivB64u;
+  if (dek === V.dek.expected) ok('dek-rsa 载荷', 'AES-256-GCM$key$iv 三段式一致');
+  else fail('dek-rsa 载荷', dek, V.dek.expected);
+
+  const priv3072 = await importPriv(bytesFromB64url(V.keys.rsa3072.priv));
+  try {
+    const plain = new TextDecoder().decode(await crypto.subtle.decrypt(
+      { name: 'RSA-OAEP', hash: 'SHA-256' }, priv3072, bytesFromB64url(V.oaepUnwrap.cipherB64u)));
+    if (plain === V.dekPlaintext) ok('oaep3072-unwrap', '解出 DEK 载荷与黄金向量一致');
+    else fail('oaep3072-unwrap', plain, V.dekPlaintext);
+  } catch (e) { fail('oaep3072-unwrap', '解密抛错: ' + e.message, V.dekPlaintext); }
+
+  try {
+    await crypto.subtle.decrypt({ name: 'RSA-OAEP', hash: 'SHA-256' }, priv3072, bytesFromB64url(V.oaepTrap.cipherB64u));
+    fail('oaep-mgf1sha1-trap', '解密成功', '必须失败');
+  } catch (e) { ok('oaep-mgf1sha1-trap', '按规格参数解密被正确拒绝'); }
+
+  for (const r of V.formatRules) {
+    let actual;
+    if (r.id.startsWith('header-')) {
+      const h = parseDigestHeader(r.value);
+      actual = (h.ok && r.id !== 'header-crossfamily') ? 'accept' : 'reject';
+      if (r.id === 'header-crossfamily' && h.ok && h.alg !== 'sha-256') actual = 'reject';
+    } else {
+      actual = strictB64urlOk(r.value) ? 'accept' : 'reject';
+    }
+    if (actual === r.expect) ok('formatRules/' + r.id, '期望 ' + r.expect + ' 一致');
+    else fail('formatRules/' + r.id, actual, r.expect);
+  }
+  return steps;
+}
+
+$('run-selftest').addEventListener('click', async () => {
+  const stepsEl = $('selftest-steps');
+  const banner = $('selftest-banner');
+  const status = $('selftest-status');
+  stepsEl.innerHTML = ''; banner.textContent = ''; banner.className = 'badge';
+  status.textContent = '运行中…';
+  const steps = await runSelftest();
+  renderSteps(stepsEl, steps);
+  const pass = steps.every(s => s.ok);
+  status.textContent = '';
+  banner.textContent = pass
+    ? '✓ ' + steps.length + ' 项断言全部通过 —— 本工具与 wop-specs 黄金向量对齐（v1.0-ratified F8）'
+    : '✗ ' + steps.filter(s => !s.ok).length + ' 项失败 —— 与规格不一致，请勿用于联调';
+  banner.className = 'badge ' + (pass ? 'ok' : 'err');
+});
 
 </script>
 </body>
