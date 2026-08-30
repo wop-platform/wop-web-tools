@@ -110,6 +110,24 @@
   canonicalRequest 与 x-wop-sign draft 与 `wop sign` 输出逐字节一致。
 - **A6** 页面无任何网络请求（DevTools Network 面板为空），无第三方脚本（S1）。
 - **A7** README 中英双语（中文默认）四段必备齐全；MIT License；vectors fixture 与真源字节一致。
+### 5.1 条款 → 断言反向核对矩阵
+
+| 条款 | 断言载体（grep 索引） | 断言内容 | 语义 |
+|---|---|---|---|
+| WF2 密钥自检 | `generate()` 三重自检（spec 注） | 签名往返 / OAEP 往返 / 模数位 | 任失败拒绝输出 |
+| WF4 构造请求 | `buildRequest()` canonical 预检 | 商户公钥验签 canonical | 等价网关 SignFilter |
+| WF5 验证顺序 | `verifyResponse()` 步骤展示 | 验签→digest→DEK→alg 族→bulk（F6 钉死） | I2/I3 |
+| WF5 I5 族比对 | `// spec:WF5.I5`（verifyResponse step3） | `h.ok && h.alg==='sha-256'`，sm3 头拒绝 | 与 formatRules 同源 |
+| WF6 digest | `// spec:WF6.digest`（runSelftest） | digest-sha256 字节级 + 头格式 | 正向量 |
+| WF6 sign | `// spec:WF6.sign` | RSA 3072/4096 签名字节级 | 正向量 |
+| WF6 aesgcm | `// spec:WF6.aesgcm` | 密文\|\|tag 字节级 | 正向量 |
+| WF6 dek | `// spec:WF6.dek` | DEK 三段式 + OAEP 解包 + MGF1 陷阱拒绝 | 正/负向量 |
+| WF6 formatRules | `// spec:WF6.formatRules` | 11 条：族比对推导 accept/reject | 正/负向量 |
+| S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
+| S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
+| G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
+
+> 注：扫描范围剔除自扫描函数自身源码（toString），描述性文案不误伤；禁词拼接书写双保险。
 
 ## 6. 决策记录（D1–D8）
 

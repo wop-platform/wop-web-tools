@@ -873,13 +873,13 @@ async function verifyResponse() {
     steps.push({ ok: sigOk, text: sigOk ? '验签通过：平台公钥 SHA256withRSA 校验' + ($('v-type').value === 'callback' ? '回调' : '响应') + '签名'
       : '验签失败：检查平台公钥是否匹配、报文类型/回调 URL 是否正确（canonical 的 URI 取自其 path）、头值是否复制完整' });
 
-    // step3 摘要复核（F6：验签之后）
+    // step3 摘要复核（F6：验签之后；I5：RSA 套件只认 sha-256 头，sm3 头视为跨族拒绝）
     const computed = await sha256Hex(body);
     const dh = parseDigestHeader(vSha);
-    const shaOk = dh.ok && dh.hex === computed;
+    const shaOk = dh.ok && dh.alg === 'sha-256' && dh.hex === computed;
     steps.push({ ok: shaOk, text: shaOk ? '摘要复核：sha-256(body) 与 x-wop-content-digest 一致'
       : '摘要复核失败：header=' + (vSha || '空') + '，实际 sha-256=' + computed
-        + '（格式须为 <sha-256|sm3> + 恰一空格 + 64 位小写 hex；body 可能被篡改或粘贴不完整）' });
+        + '（RSA 套件须为 sha-256 + 恰一空格 + 64 位小写 hex；sm3 头属跨族拒绝；body 可能被篡改或粘贴不完整）' });
 
     // step4 L2 解密
     if (vEncrypt.toUpperCase().startsWith('L2')) {
@@ -1192,14 +1192,17 @@ async function runSelftest() {
   const ok = (id, extra) => steps.push({ ok: true, text: id + (extra ? '：' + extra : '') });
   const V = WOP_VECTORS;
 
+  // spec:WF6.digest —— 正向量：digest-sha256 字节级
   const hex = await sha256Hex(V.message);
   if (hex === V.digest.expectedHex) ok('digest-sha256', V.digest.algorithm + ' 64 位 hex 一致');
   else fail('digest-sha256', hex, V.digest.expectedHex);
 
+  // spec:WF6.digest —— 正向量：头格式（D2/F5：<alg> 恰一空格 <64 小写 hex>）+ 族比对（I5：RSA 套件只认 sha-256）
   const hd = parseDigestHeader(V.digest.expectedHeader);
   if (hd.ok && hd.alg === 'sha-256' && hd.hex === V.digest.expectedHex) ok('digest 头格式', 'sha-256 + 恰一空格 + 64 位小写 hex');
   else fail('digest 头格式', JSON.stringify(hd), V.digest.expectedHeader);
 
+  // spec:WF6.sign —— 正向量：RSA 3072/4096 签名字节级（SHA256withRSA）
   for (const id of ['rsa3072', 'rsa4096']) {
     const s = V.sign[id];
     const key = await importPrivSign(bytesFromB64url(V.keys[id].priv));
@@ -1209,6 +1212,7 @@ async function runSelftest() {
     else fail(s.id, sigB64u, s.expectedSigB64u);
   }
 
+  // spec:WF6.aesgcm —— 正向量：AES-256-GCM 密文||tag 字节级（tag 128bit）
   const aesKey = await crypto.subtle.importKey('raw', bytesFromB64url(V.aesgcm.keyB64u), 'AES-GCM', false, ['encrypt']);
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: bytesFromB64url(V.aesgcm.ivB64u), tagLength: 128 },
@@ -1217,10 +1221,12 @@ async function runSelftest() {
   if (ctB64u === V.aesgcm.cipherTagB64u) ok('aesgcm-encrypt', '密文||tag ' + ct.length + ' 字节与黄金向量一致');
   else fail('aesgcm-encrypt', ctB64u, V.aesgcm.cipherTagB64u);
 
+  // spec:WF6.dek —— 正向量：DEK 载荷组装（AES-256-GCM$b64u(key)$b64u(iv)）
   const dek = V.dek.alg + '$' + V.dek.keyB64u + '$' + V.dek.ivB64u;
   if (dek === V.dek.expected) ok('dek-rsa 载荷', 'AES-256-GCM$key$iv 三段式一致');
   else fail('dek-rsa 载荷', dek, V.dek.expected);
 
+  // spec:WF6.dek —— 正向量：RSA-OAEP(SHA-256) 解包 DEK 字节级
   const priv3072 = await importPriv(bytesFromB64url(V.keys.rsa3072.priv));
   try {
     const plain = new TextDecoder().decode(await crypto.subtle.decrypt(
@@ -1229,26 +1235,48 @@ async function runSelftest() {
     else fail('oaep3072-unwrap', plain, V.dekPlaintext);
   } catch (e) { fail('oaep3072-unwrap', '解密抛错: ' + e.message, V.dekPlaintext); }
 
+  // spec:WF6.dek —— 负向量：MGF1-SHA1 陷阱（规格参数解密必须失败）
   try {
     await crypto.subtle.decrypt({ name: 'RSA-OAEP', hash: 'SHA-256' }, priv3072, bytesFromB64url(V.oaepTrap.cipherB64u));
     fail('oaep-mgf1sha1-trap', '解密成功', '必须失败');
   } catch (e) { ok('oaep-mgf1sha1-trap', '按规格参数解密被正确拒绝'); }
 
+  // spec:WF6.formatRules —— 11 条格式规则；digest 头以族比对推导（h.ok && h.alg === 'sha-256'），与 verifyResponse 的 I5 语义同源
   for (const r of V.formatRules) {
     let actual;
     if (r.id.startsWith('header-')) {
       const h = parseDigestHeader(r.value);
-      actual = (h.ok && r.id !== 'header-crossfamily') ? 'accept' : 'reject';
-      if (r.id === 'header-crossfamily' && h.ok && h.alg !== 'sha-256') actual = 'reject';
+      actual = (h.ok && h.alg === 'sha-256') ? 'accept' : 'reject';
     } else {
       actual = strictB64urlOk(r.value) ? 'accept' : 'reject';
     }
     if (actual === r.expect) ok('formatRules/' + r.id, '期望 ' + r.expect + ' 一致');
     else fail('formatRules/' + r.id, actual, r.expect);
   }
+
+  // spec:S1/S2 —— 否定式条款：零外发 + 不落盘（源码自扫描）
+  // 扫描范围剔除本函数自身源码（toString 后替换），使描述性注释/文案不误伤；禁词另以拼接书写双保险
+  const scan = scanSelfForBanned();
+  if (scan.s1.pass) ok('S1 零外发', scan.s1.text); else fail('S1 零外发', scan.s1.detail, '无');
+  if (scan.s2.pass) ok('S2 不落盘', scan.s2.text); else fail('S2 不落盘', scan.s2.detail, '无');
+
   return steps;
 }
 
+// spec:S1/S2 —— 页面源码自扫描器：外部资源引用 / 网络 API / 存储 API（禁词拼接防自命中；文案在函数内随自身剔除）
+function scanSelfForBanned() {
+  const SRC = document.documentElement.outerHTML.replace(scanSelfForBanned.toString(), '');
+  const extRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*(?:src|href)\s*=/g;
+  const extHits = [...SRC.matchAll(extRe)].map(m => m[0].slice(0, 60));
+  const netWords = ['fet' + 'ch(', 'X' + 'MLHttpRequest', 'Web' + 'Socket', 'Event' + 'Source', 'send' + 'Beacon'];
+  const netHits = netWords.filter(w => SRC.includes(w));
+  const storeWords = ['local' + 'Storage', 'session' + 'Storage', 'indexed' + 'DB'];
+  const storeHits = storeWords.filter(w => SRC.includes(w));
+  return {
+    s1: { pass: !extHits.length && !netHits.length, text: '无外部资源引用、无网络 API（源码自扫描）', detail: JSON.stringify({ extHits, netHits }) },
+    s2: { pass: !storeHits.length, text: '无浏览器存储 API（源码自扫描）', detail: JSON.stringify(storeHits) },
+  };
+}
 $('run-selftest').addEventListener('click', async () => {
   const stepsEl = $('selftest-steps');
   const banner = $('selftest-banner');
