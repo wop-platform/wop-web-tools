@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WOP 商户 RSA 密钥生成器</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --text: #1f2329;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success: #16a34a;
+    --success-bg: #f0fdf4;
+    --danger: #dc2626;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header p { color: var(--muted); margin: 0 0 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 14px; }
+  fieldset { border: none; padding: 0; margin: 0 0 14px; }
+  fieldset legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0; }
+  .radios { display: flex; flex-wrap: wrap; gap: 8px; }
+  .radios label {
+    display: flex; align-items: flex-start; gap: 8px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; cursor: pointer; flex: 1; min-width: 180px;
+  }
+  .radios label:has(input:checked) { border-color: var(--primary); background: #eff6ff; }
+  .radios input { margin-top: 4px; accent-color: var(--primary); }
+  .radios b { display: block; font-size: 14px; }
+  .radios small { color: var(--muted); }
+  .selects { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .selects label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: #fff; font: inherit; color: var(--text);
+  }
+  .actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+  button {
+    font: inherit; border-radius: 8px; cursor: pointer;
+    padding: 9px 18px; border: 1px solid var(--border); background: #fff; color: var(--text);
+  }
+  button:hover { border-color: #c4c9d1; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .primary { background: var(--primary); border-color: var(--primary); color: #fff; padding: 10px 28px; font-weight: 600; }
+  .primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+  #status { font-size: 13px; color: var(--muted); }
+  .badge {
+    display: none; align-items: center; gap: 8px;
+    background: var(--success-bg); color: var(--success);
+    border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px;
+    font-size: 13px; margin-bottom: 16px;
+  }
+  .badge.show { display: flex; }
+  .badge.err { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
+  .keycard .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .keycard h2 { margin: 0; }
+  .keycard .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .btns { display: flex; gap: 8px; }
+  textarea {
+    width: 100%; min-height: 170px; resize: vertical;
+    font: 12px/1.5 var(--mono); color: var(--text);
+    background: #fafbfc; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; white-space: pre; overflow-wrap: normal; overflow-x: auto;
+  }
+  textarea.masked { color: transparent; text-shadow: 0 0 6px rgba(31,35,41,.75); }
+  .fingerprint { font: 12px/1.6 var(--mono); color: var(--muted); word-break: break-all; margin-top: 8px; }
+  .notice { font-size: 13px; color: var(--muted); }
+  .notice ul { margin: 8px 0 0; padding-left: 20px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%) translateY(20px);
+    background: #1f2329; color: #fff; border-radius: 8px; padding: 8px 18px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #result { display: none; }
+  #result.show { display: block; }
+  /* ===== Tab ===== */
+  .tabbar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+  .tabbar button {
+    border: none; background: none; padding: 10px 18px; font: inherit; font-weight: 600;
+    color: var(--muted); border-radius: 8px 8px 0 0; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  }
+  .tabbar button.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tabpage[hidden] { display: none; }
+  /* ===== 联调表单 ===== */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font: 12px/1.5 var(--mono); background: #fff; color: var(--text);
+  }
+  .field textarea { min-height: 120px; white-space: pre; overflow-x: auto; resize: vertical; }
+  .field .help { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  textarea.small { min-height: 84px; }
+  .kv { width: 100%; border-collapse: collapse; font: 12px/1.5 var(--mono); }
+  .kv td { border-bottom: 1px solid var(--border); padding: 8px 6px; vertical-align: top; }
+  .kv td:first-child { color: var(--muted); white-space: nowrap; width: 170px; }
+  .kv td:last-child { word-break: break-all; }
+  .kv .copyable { cursor: pointer; }
+  .kv .copyable:hover { color: var(--primary); }
+  .steps { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .steps li { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--border); }
+  .steps li:last-child { border-bottom: none; }
+  .steps .st { flex: 0 0 20px; text-align: center; font-weight: 700; }
+  .steps li.ok .st { color: var(--success); }
+  .steps li.bad .st { color: var(--danger); }
+  .steps li.skip { color: var(--muted); }
+  .steps .detail { word-break: break-all; }
+  details.debug { margin-top: 10px; }
+  details.debug summary { font-size: 13px; color: var(--muted); cursor: pointer; }
+  details.debug pre {
+    font: 12px/1.5 var(--mono); background: #fafbfc; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0;
+  }
+  #req-out, #resp-out { display: none; }
+  #req-out.show, #resp-out.show { display: block; }
+  .inline-note { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>WOP 商户 RSA 密钥生成器</h1>
+    <p>密钥对完全在您的浏览器本地生成，不会上传到任何服务器。生成后将「商户公钥」上传至开放平台，「商户私钥」自行妥善保管。</p>
+  </header>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="keygen" class="active">密钥生成</button>
+    <button data-tab="request">报文联调</button>
+  </nav>
+
+  <div class="tabpage" id="tab-keygen">
+  <div id="status-banner" class="badge"></div>
+
+  <section class="card">
+  <h2>1. 生成配置</h2>
+    <fieldset>
+      <legend>密钥长度</legend>
+      <div class="radios" id="bitlen">
+        <label><input type="radio" name="bits" value="3072" checked>
+          <span><b>3072 位（推荐）</b><small>对应安全套件 WOP-RSA3072-SHA256</small></span></label>
+        <label><input type="radio" name="bits" value="4096">
+          <span><b>4096 位</b><small>对应安全套件 WOP-RSA4096-SHA256</small></span></label>
+      </div>
+      <p class="hint" style="margin:8px 0 0">注：如被要求生成「3074 位」密钥，即为笔误——RSA 不存在 3074 位，平台仅支持 3072 / 4096（OP_GW_1014），请选择 3072。</p>
+    </fieldset>
+    <div class="selects">
+      <div>
+        <label for="privfmt">私钥格式</label>
+        <select id="privfmt">
+          <option value="pkcs8" selected>PKCS#8 PEM（推荐 · 平台文档格式）</option>
+          <option value="base64">单行 Base64（PKCS#8 DER · 网关程序对接格式）</option>
+        </select>
+      </div>
+      <div>
+        <label for="pubfmt">公钥格式</label>
+        <select id="pubfmt">
+          <option value="spki" selected>X.509 SPKI PEM（推荐 · 平台文档格式）</option>
+          <option value="base64">单行 Base64（SPKI DER · 网关程序对接格式）</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="gen">生成密钥对</button>
+      <span id="status"></span>
+    </div>
+  </section>
+
+  <div id="result">
+    <section class="card">
+      <div class="badge" id="selftest"></div>
+      <div class="fingerprint" id="fp"></div>
+    </section>
+
+    <section class="card keycard">
+      <div class="head">
+        <h2>商户公钥 <span class="hint">（上传至开放平台）</span></h2>
+        <div class="btns">
+          <button data-copy="pub">复制</button>
+          <button data-download="pub">下载</button>
+        </div>
+      </div>
+      <textarea id="pub-out" readonly spellcheck="false"></textarea>
+    </section>
+
+    <section class="card keycard">
+      <div class="head">
+        <h2>商户私钥 <span class="hint">（自行保管，切勿外泄）</span></h2>
+        <div class="btns">
+          <button id="toggle-mask">显示</button>
+          <button data-copy="priv">复制</button>
+          <button data-download="priv">下载</button>
+        </div>
+      </div>
+      <textarea id="priv-out" readonly spellcheck="false" class="masked"></textarea>
+    </section>
+  </div>
+
+  <section class="card notice">
+    <b>安全须知</b>
+    <ul>
+      <li>本页面为纯静态单文件，无任何网络请求；密钥生成与报文加解密均在浏览器本地完成（需 HTTPS 或本地文件环境的 Web Crypto API）。</li>
+      <li>私钥一旦丢失需在平台重新上传公钥并走密钥轮换流程；请离线备份，不要提交到代码仓库。</li>
+      <li>平台消费 PKCS#8 私钥 / X.509 SPKI 公钥（PEM 或其单行 Base64）；网关以 RSA-OAEP(SHA-256) 包装 DEK、以 SHA256withRSA 验签。</li>
+    </ul>
+  </section>
+  </div><!-- /tab-keygen -->
+
+  <div class="tabpage" id="tab-request" hidden>
+    <section class="card">
+      <h2>1. 密钥配置</h2>
+      <div class="grid2">
+        <div class="field">
+          <label for="m-priv">商户私钥（PKCS#8，PEM 或单行 Base64）</label>
+          <textarea id="m-priv" class="small" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----&#10;……"></textarea>
+          <div class="btns" style="margin-top:8px">
+            <button id="import-keygen">从「密钥生成」页带入</button>
+          </div>
+          <p class="help" id="m-pub-fp">填入后自动派生商户公钥指纹（SHA-256），应与平台上该商户公钥指纹一致。</p>
+        </div>
+        <div class="field">
+          <label for="p-pub">平台公钥（X.509 SPKI，PEM 或单行 Base64）</label>
+          <textarea id="p-pub" class="small" spellcheck="false" placeholder="-----BEGIN PUBLIC KEY-----&#10;……"></textarea>
+          <div class="btns" style="margin-top:8px">
+            <button id="gen-platform">生成联调平台密钥对</button>
+          </div>
+          <p class="help">联调模式：本地生成模拟平台密钥对（私钥仅存本次会话内存，用于「模拟平台响应」），生产环境请粘贴平台下发的真实公钥。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. 构造请求（商户 → 网关）</h2>
+      <div class="grid3">
+        <div class="field"><label for="r-appkey">appKey</label><input id="r-appkey" value="demo_app_key"></div>
+        <div class="field"><label for="r-path">请求路径</label><input id="r-path" value="/gateway/logistics.waybill.sync"></div>
+        <div class="field"><label for="r-expired">expiredSeconds（秒）</label><input id="r-expired" type="number" value="1800" min="1" max="86400"></div>
+      </div>
+      <div class="grid3" style="margin-top:12px">
+        <div class="field"><label for="r-level">加密级别</label>
+          <select id="r-level"><option value="L2" selected>L2 全文加密</option><option value="L0">L0 明文</option></select>
+        </div>
+        <div class="field"><label for="r-host">网关地址（仅用于生成 curl）</label><input id="r-host" value="https://gateway.example.com"></div>
+        <div class="field"><label for="r-suite">安全套件</label>
+          <select id="r-suite"><option>WOP-RSA3072-SHA256</option><option>WOP-RSA4096-SHA256</option></select>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label for="r-body">业务明文 body（JSON）</label>
+        <textarea id="r-body" spellcheck="false">{"orderId":"W20260827001","waybillNo":"SF-888","status":"SIGNED"}</textarea>
+      </div>
+      <div class="actions" style="margin-top:12px">
+        <button class="primary" id="build-req">构造请求</button>
+        <span id="r-status" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+    </section>
+
+    <div id="req-out">
+      <section class="card">
+        <h2>构造结果</h2>
+        <ul class="steps" id="req-steps"></ul>
+        <details class="debug"><summary>调试：canonicalRequest（签名串原文）</summary><pre id="req-canonical"></pre></details>
+        <details class="debug" open><summary>请求头（点击值可复制）</summary>
+          <table class="kv" id="req-headers"></table>
+        </details>
+        <details class="debug" open><summary>线上请求体（x-wop-content-digest 即对此串取摘要）</summary><pre id="req-wire-body"></pre></details>
+        <details class="debug" open><summary>curl 命令</summary><pre id="req-curl"></pre></details>
+      </section>
+
+      <section class="card">
+        <h2>3. 验证平台报文（同步响应 / 异步回调）</h2>
+        <p class="inline-note">粘贴平台侧报文（网关同步响应，或平台主动发起的异步回调）的头与体，逐项复核摘要 / 验签 / 解密。两类报文处理逻辑一致，仅 canonical 的 URI 不同：响应取网关 API 路径，回调取回调 URL 的 path。联调模式下也可直接本地模拟闭环。<br><b style="color:#b45309">⚠ 回调协议按同步响应出站语义（平台私钥 SHA256withRSA 加签 + 商户公钥包裹 DEK）推演，网关回调实现尚未冻结，最终以平台接入文档为准。</b></p>
+        <div class="grid3" style="margin-top:8px">
+          <div class="field"><label for="v-type">报文类型</label>
+            <select id="v-type">
+              <option value="response" selected>同步响应（URI = 网关请求路径）</option>
+              <option value="callback">异步回调（URI = 回调 URL path）</option>
+            </select>
+          </div>
+          <div class="field" style="grid-column:1/3"><label for="v-cburl">商户回调 URL（回调类型时必填，如 https://merchant.example.com/wop/callback）</label><input id="v-cburl" placeholder="https://merchant.example.com/wop/callback"></div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field"><label for="v-sign">x-wop-sign</label><textarea id="v-sign" class="small" spellcheck="false" placeholder="WOP-RSA3072-SHA256 v1/1800/…/…"></textarea></div>
+          <div class="field"><label for="v-encrypt">x-wop-encrypt（L2 时填）</label><textarea id="v-encrypt" class="small" spellcheck="false" placeholder="L2;dek=…"></textarea></div>
+        </div>
+        <div class="grid3" style="margin-top:12px">
+          <div class="field"><label for="v-nonce">x-wop-nonce</label><input id="v-nonce"></div>
+          <div class="field"><label for="v-ts">x-wop-timestamp</label><input id="v-ts"></div>
+          <div class="field"><label for="v-sha">x-wop-content-digest</label><input id="v-sha"></div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label for="v-body">报文体（L2 时为 {"encrypted":"…"} 密文载体）</label>
+          <textarea id="v-body" class="small" spellcheck="false"></textarea>
+        </div>
+        <div class="field" style="margin-top:12px" id="cb-sample-wrap" hidden>
+          <label for="cb-body">回调业务明文（模拟回调载荷样例，可编辑）</label>
+          <textarea id="cb-body" class="small" spellcheck="false">{"event":"logistics.waybill.statusChanged","data":{"orderId":"W20260827001","waybillNo":"SF-888","status":"SIGNED","changedAt":"2026-08-27T10:00:00Z"}}</textarea>
+        </div>
+        <div class="actions" style="margin-top:12px">
+          <button class="primary" id="verify-resp">验证并解密</button>
+          <button id="sim-resp">模拟平台响应并验证</button>
+          <button id="sim-cb">模拟平台回调并验证</button>
+          <span id="v-status" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+      </section>
+
+      <div id="resp-out">
+        <section class="card">
+          <h2>验证结果</h2>
+          <ul class="steps" id="resp-steps"></ul>
+          <details class="debug" open id="resp-plain-wrap"><summary>解密后的报文明文</summary><pre id="resp-plain"></pre></details>
+          <details class="debug"><summary>调试：报文 canonicalRequest</summary><pre id="resp-canonical"></pre></details>
+          <details class="debug" id="cb-curl-wrap" hidden><summary>平台 → 商户回调 curl（用于自测您的回调接收端点；报文格式为推演契约）</summary><pre id="cb-curl"></pre></details>
+        </section>
+      </div>
+
+    </div>
+  </div><!-- /tab-request -->
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ================= ASN.1 / DER 最小工具 ================= */
+
+
+// 对一个完整 DER 序列的 content 切分顶层 TLV
+function derSplit(buf) {
+  const elems = [];
+  let i = 0;
+  while (i < buf.length) {
+    const start = i;
+    i++; // tag（本场景均为单字节 tag）
+    let len = buf[i++];
+    if (len & 0x80) {
+      const n = len & 0x7f;
+      len = 0;
+      for (let k = 0; k < n; k++) len = (len << 8) | buf[i++];
+    }
+    elems.push({ tag: buf[start], content: buf.subarray(i, i + len) });
+    i += len;
+  }
+  return elems;
+}
+
+
+/* ================= PEM / Base64 ================= */
+
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function toPem(label, der) {
+  const b64 = toBase64(der);
+  const lines = b64.match(/.{1,64}/g) || [];
+  return '-----BEGIN ' + label + '-----\n' + lines.join('\n') + '\n-----END ' + label + '-----\n';
+}
+
+function hexColon(bytes) {
+  return [...bytes].map(b => b.toString(16).padStart(2, '0')).join(':');
+}
+
+/* ================= 状态与 UI ================= */
+
+const $ = id => document.getElementById(id);
+const state = { pkcs8: null, spki: null, bits: 0, selfTestOk: false };
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function renderPriv() {
+  const fmt = $('privfmt').value;
+  $('priv-out').value = fmt === 'pkcs8' ? toPem('PRIVATE KEY', state.pkcs8) : toBase64(state.pkcs8);
+}
+
+function renderPub() {
+  const fmt = $('pubfmt').value;
+  $('pub-out').value = fmt === 'spki' ? toPem('PUBLIC KEY', state.spki) : toBase64(state.spki);
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } finally { ta.remove(); }
+  return Promise.resolve();
+}
+
+function download(name, text) {
+  const blob = new Blob([text], { type: 'application/octet-stream' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function extFor(kind) {
+  const fmt = $(kind === 'priv' ? 'privfmt' : 'pubfmt').value;
+  return fmt === 'base64' ? 'txt' : 'pem';
+}
+
+/* ================= 生成与自检 ================= */
+
+async function generate() {
+  const bits = Number(document.querySelector('input[name=bits]:checked').value);
+  const btn = $('gen');
+  btn.disabled = true;
+  $('status').textContent = '正在生成 ' + bits + ' 位密钥…（约需数秒）';
+  $('status-banner').className = 'badge';
+  $('status-banner').textContent = '';
+  state.selfTestOk = false;
+  $('result').classList.remove('show');
+  $('selftest').className = 'badge';
+  $('priv-out').value = '';
+  $('pub-out').value = '';
+  await new Promise(r => setTimeout(r, 30)); // 先渲染 loading
+
+  try {
+    const kp = await crypto.subtle.generateKey(
+      { name: 'RSA-OAEP', modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+    const spki = new Uint8Array(await crypto.subtle.exportKey('spki', kp.publicKey));
+
+    // 自检 1：重新导入为 SHA256withRSA（网关验签算法）做签名/验签往返
+    const data = new TextEncoder().encode('WOP-RSA' + bits + ' keypair self-test');
+    const signKey = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+    const verifyKey = await crypto.subtle.importKey('spki', spki, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, data);
+    const signOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verifyKey, sig, data);
+
+    // 自检 2：重新导入为 RSA-OAEP-SHA-256（网关 DEK 包装算法）做加密/解密往返
+    const encKey = await crypto.subtle.importKey('spki', spki, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const decKey = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+    const dek = crypto.getRandomValues(new Uint8Array(32));
+    const wrapped = await crypto.subtle.encrypt('RSA-OAEP', encKey, dek);
+    const unwrapped = new Uint8Array(await crypto.subtle.decrypt('RSA-OAEP', decKey, wrapped));
+    const wrapOk = unwrapped.length === dek.length && unwrapped.every((b, i) => b === dek[i]);
+
+    // 自检 3：模数位数与所选一致
+    const privInfo = derSplit(derSplit(pkcs8)[0].content);       // [version, algId, OCTET STRING]
+    const rsaPrivSeq = derSplit(privInfo[2].content)[0];         // RSAPrivateKey SEQUENCE
+    const modulus = derSplit(rsaPrivSeq.content)[1].content;     // [version, n, e, d, ...] → n
+    let lead = 0;                                                // 去掉 DER 正数的前导 0x00
+    while (lead < modulus.length && modulus[lead] === 0) lead++;
+    const nBits = lead >= modulus.length ? 0
+      : (modulus.length - lead - 1) * 8 + (32 - Math.clz32(modulus[lead]));
+    const bitsOk = nBits === bits;
+
+    if (!(signOk && wrapOk && bitsOk)) throw new Error('自检未通过（sign=' + signOk + ' wrap=' + wrapOk + ' bits=' + nBits + '）');
+
+    state.pkcs8 = pkcs8;
+    state.spki = spki;
+    state.bits = bits;
+    state.selfTestOk = true;
+
+    renderPriv();
+    renderPub();
+    $('priv-out').classList.add('masked');
+    $('toggle-mask').textContent = '显示';
+
+    const fp = new Uint8Array(await crypto.subtle.digest('SHA-256', spki));
+    $('fp').textContent = '公钥指纹 SHA-256（SPKI）：\n' + hexColon(fp);
+
+    const st = $('selftest');
+    st.className = 'badge show';
+    st.textContent = '✓ 自检通过：' + bits + ' 位 · SHA256withRSA 签名/验签往返一致 · RSA-OAEP(SHA-256) 加解密往返一致 · 适用于 WOP-RSA' + bits + '-SHA256 套件';
+
+    $('result').classList.add('show');
+    $('status').textContent = '';
+    toast('生成成功');
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    const banner = $('status-banner');
+    banner.className = 'badge show err';
+    banner.textContent = '生成失败：' + (err && err.message ? err.message : err) + '。请确认浏览器为 Chrome 37+ / Safari 11+ / Firefox 34+ 且运行在安全上下文（HTTPS 或本地文件）。';
+    $('status').textContent = '';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ================= 事件绑定 ================= */
+
+$('gen').addEventListener('click', generate);
+
+$('privfmt').addEventListener('change', () => { if (state.pkcs8) renderPriv(); });
+$('pubfmt').addEventListener('change', () => { if (state.spki) renderPub(); });
+
+$('toggle-mask').addEventListener('click', () => {
+  const ta = $('priv-out');
+  const masked = ta.classList.toggle('masked');
+  $('toggle-mask').textContent = masked ? '显示' : '隐藏';
+});
+
+document.querySelectorAll('[data-copy]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!state.selfTestOk) return;
+    const kind = btn.dataset.copy;
+    copyText($(kind === 'priv' ? 'priv-out' : 'pub-out').value)
+      .then(() => toast((kind === 'priv' ? '私钥' : '公钥') + '已复制到剪贴板'))
+      .catch(() => toast('复制失败，请手动选择复制'));
+  });
+});
+
+document.querySelectorAll('[data-download]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!state.selfTestOk) return;
+    const kind = btn.dataset.download;
+    const ext = extFor(kind);
+    const name = 'merchant_rsa_' + state.bits + 'bit_' + (kind === 'priv' ? 'private' : 'public') + '.' + ext;
+    download(name, $(kind === 'priv' ? 'priv-out' : 'pub-out').value);
+    toast('已下载 ' + name);
+  });
+});
+
+if (!window.crypto || !crypto.subtle) {
+  const banner = $('status-banner');
+  banner.className = 'badge show err';
+  banner.textContent = '当前浏览器不支持 Web Crypto API，无法生成密钥。请更换现代浏览器，或确认页面运行在 HTTPS / 本地文件等安全上下文中。';
+  $('gen').disabled = true;
+}
+
+/* ================================================================
+ * Tab 2：WOP 报文联调
+ * 协议与 gtsp-wop-gateway 对齐：
+ *   canonical = authString \n METHOD \n path \n queryString \n canonicalHeaders
+ *   签名 SHA256withRSA → base64url 无填充；DEK 包装 RSA-OAEP(SHA-256/MGF1-SHA-256)
+ *   DEK 载荷 "AES-256-GCM$base64url(key)$base64url(iv)"；密文 base64url(GCM ct‖tag)
+ *   摘要头 x-wop-content-digest: "sha-256 <64位小写hex>"（恰一空格；入签；canonical 值按 urlencode 空格→%20）
+ */
+// —— DER 编码工具（商户公钥派生用）——
+function concatBytes2() {
+  let n = 0;
+  for (const a of arguments) n += a.length;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const a of arguments) { out.set(a, o); o += a.length; }
+  return out;
+}
+function derLenBytes2(n) {
+  if (n < 0x80) return [n];
+  const bytes = [];
+  while (n) { bytes.unshift(n & 0xff); n >>>= 8; }
+  return [0x80 | bytes.length].concat(bytes);
+}
+function derEnc2(tag, content) {
+  const l = derLenBytes2(content.length);
+  const out = new Uint8Array(1 + l.length + content.length);
+  out[0] = tag;
+  out.set(l, 1);
+  out.set(content, 1 + l.length);
+  return out;
+}
+const WOP_OID_RSA = new Uint8Array([0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]);
+const WOP_RSA_ALG_ID = derEnc2(0x30, concatBytes2(WOP_OID_RSA, new Uint8Array([0x05, 0x00])));
+
+// PKCS#8 → SPKI（提取 n/e 重组公钥）
+function pkcs8ToSpki(pkcs8) {
+  const info = derSplit(derSplit(pkcs8)[0].content);           // [version, algId, OCTET STRING]
+  const rsaPriv = derSplit(info[2].content)[0];                // RSAPrivateKey SEQUENCE
+  const f = derSplit(rsaPriv.content);                         // [version, n, e, d, ...]
+  const rsaPub = derEnc2(0x30, concatBytes2(derEnc2(0x02, f[1].content), derEnc2(0x02, f[2].content)));
+  return derEnc2(0x30, concatBytes2(WOP_RSA_ALG_ID, derEnc2(0x03, concatBytes2(new Uint8Array([0]), rsaPub))));
+}
+
+// —— base64url 无填充 ——
+function b64urlFromBytes(bytes) {
+  return toBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function bytesFromB64url(s) {
+  let t = s.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
+  while (t.length % 4) t += '=';
+  const bin = atob(t);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// —— 密钥输入解析：兼容 PEM / 单行 Base64 / base64url ——
+function keyInputToDer(text) {
+  const t = String(text || '').replace(/-----(BEGIN|END)[^-]*-----/g, '').replace(/\s+/g, '');
+  if (t.length < 40) throw new Error('密钥内容为空或过短');
+  return bytesFromB64url(t);
+}
+
+// —— canonical 构造（与 CanonicalRequestBuilder 一致）——
+function javaUrlEncode(s) {
+  // Java URLEncoder：字母数字与 .-_ * 不编码；encodeURIComponent 额外保留 ! ' ( ) ~，需补编码
+  return encodeURIComponent(s).replace(/[!'()~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+function trimall(s) { return String(s == null ? '' : s).trim().replace(/\s+/g, ' '); }
+function canonicalHeaders(map) {
+  const keys = Object.keys(map).map(k => trimall(k).toLowerCase()).sort();
+  return keys.map(k => javaUrlEncode(k) + ':' + javaUrlEncode(trimall(map[k]))).join('\n');
+}
+function buildCanonical(auth, method, path, qs, ch) {
+  // 与 CanonicalRequestBuilder.build 一致：5 段 '\n' 连接，POST 的 queryString 为空串
+  return auth + '\n' + method.toUpperCase() + '\n' + path + '\n' + (qs || '') + '\n' + ch;
+}
+async function sha256Hex(text) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text == null ? '' : text)));
+  return [...d].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function randBytes(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+function nonce32() { return [...randBytes(16)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+
+// —— Web Crypto 包装 ——
+async function importPriv(der) {
+  return crypto.subtle.importKey('pkcs8', der, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+}
+async function importPrivSign(der) {
+  return crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+}
+async function importPub(der, usage) {
+  const alg = usage === 'verify' ? { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } : { name: 'RSA-OAEP', hash: 'SHA-256' };
+  return crypto.subtle.importKey('spki', der, alg, false, [usage]);
+}
+
+// —— 步骤列表渲染 ——
+function renderSteps(el, steps) {
+  el.innerHTML = '';
+  for (const s of steps) {
+    const li = document.createElement('li');
+    li.className = s.ok === true ? 'ok' : s.ok === false ? 'bad' : 'skip';
+    const mark = s.ok === true ? '✓' : s.ok === false ? '✗' : '·';
+    li.innerHTML = '<span class="st">' + mark + '</span><span class="detail">' + (s.ok === false && s.err ? s.err : s.text) + '</span>';
+    el.appendChild(li);
+  }
+}
+function setRows(tableId, rows) {
+  const tb = $(tableId);
+  tb.innerHTML = '';
+  for (const [k, v] of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + k + '</td><td class="copyable" title="点击复制"></td>';
+    tr.lastChild.textContent = v;
+    tr.lastChild.addEventListener('click', () => copyText(v).then(() => toast(k + ' 已复制')).catch(() => {}));
+    tb.appendChild(tr);
+  }
+}
+function shQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+// —— 联调状态 ——
+const wopCtx = { platformPriv: null, platformPubDer: null, lastDek: null, lastWireBody: null, lastPlainBody: null };
+
+async function refreshMerchantFp() {
+  const raw = $('m-priv').value;
+  if (!raw.trim()) {
+    return;
+  }
+  try {
+    const spki = pkcs8ToSpki(keyInputToDer(raw));
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', spki));
+    $('m-pub-fp').textContent = '商户公钥指纹（SHA-256/SPKI）：' + [...d].map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    $('m-pub-fp').textContent = '私钥解析失败：' + e.message;
+  }
+}
+
+/* ============ 构造请求（商户 → 网关） ============ */
+async function buildRequest() {
+  $('r-status').textContent = '';
+  const steps = [];
+  renderSteps($('req-steps'), steps);
+  let ctx;
+  try {
+    const suite = $('r-suite').value;
+    const appKey = $('r-appkey').value.trim();
+    const path = $('r-path').value.trim();
+    const expired = String(parseInt($('r-expired').value, 10) || 1800);
+    const level = $('r-level').value;
+    const plainBody = $('r-body').value;
+    const host = $('r-host').value.trim().replace(/\/+$/, '');
+    if (!appKey) throw new Error('appKey 不能为空');
+    if (!path.startsWith('/')) throw new Error('请求路径需以 / 开头');
+    if (level === 'L2') { JSON.parse(plainBody); } // L2 明文约定为业务 JSON
+
+    const merchantPrivDer = keyInputToDer($('m-priv').value);
+    const merchantPubDer = pkcs8ToSpki(merchantPrivDer);
+    const platformPubDer = keyInputToDer($('p-pub').value);
+
+    // 1. 线上请求体（L2：AES-256-GCM 全文加密）与 dek
+    let wireBody = plainBody, encryptHeader = null, dek = null;
+    if (level === 'L2') {
+      dek = randBytes(32);
+      const iv = randBytes(12);
+      const aesKey = await crypto.subtle.importKey('raw', dek, 'AES-GCM', false, ['encrypt']);
+      const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, aesKey, new TextEncoder().encode(plainBody)));
+      wireBody = '{"encrypted":"' + b64urlFromBytes(ct) + '"}';
+      const payload = 'AES-256-GCM$' + b64urlFromBytes(dek) + '$' + b64urlFromBytes(iv);
+      const enc = await importPub(platformPubDer, 'encrypt');
+      const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, enc, new TextEncoder().encode(payload)));
+      encryptHeader = 'L2;dek=' + b64urlFromBytes(wrapped);
+    }
+
+    // 2. 参与签名的头（ASCII 升序由 canonicalHeaders 统一排序）
+    const headers = {};
+    headers['x-wop-appkey'] = appKey;
+    headers['x-wop-content-digest'] = 'sha-256 ' + await sha256Hex(wireBody);
+    if (encryptHeader) headers['x-wop-encrypt'] = encryptHeader;
+    headers['x-wop-nonce'] = nonce32();
+    headers['x-wop-timestamp'] = String(Date.now());
+
+    // 3. canonical + 签名
+    const authString = 'v1/' + expired;
+    const canonical = buildCanonical(authString, 'POST', path, '', canonicalHeaders(headers));
+    const signKey = await importPrivSign(merchantPrivDer);
+    const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, new TextEncoder().encode(canonical)));
+    const signature = b64urlFromBytes(sig);
+    const signedNames = Object.keys(headers).sort().join(';');
+    const signHeader = suite + ' ' + authString + '/' + signedNames + '/' + signature;
+
+    // 4. 本地预检（等价网关 SignFilter 重建路径）
+    const verKey = await importPub(merchantPubDer, 'verify');
+    const selfOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verKey, sig, new TextEncoder().encode(canonical));
+    steps.push({ ok: true, text: 'DEK/密文：' + (level === 'L2' ? 'AES-256-GCM 32B key + 12B IV，RSA-OAEP(SHA-256) 包装' : 'L0 明文') });
+    steps.push({ ok: selfOk !== false, text: '本地预检：以商户公钥对 canonicalRequest 验签' + (selfOk ? '通过' : '失败') });
+    if (wopCtx.platformPriv && level === 'L2') {
+      // 联调模式全链路自检：模拟平台私钥解包 DEK 并解密 body
+      const decKey = await crypto.subtle.importKey('pkcs8', wopCtx.platformPriv, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+      const dekPlain = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, decKey, bytesFromB64url(encryptHeader.slice(encryptHeader.indexOf('dek=') + 4))));
+      const parts = dekPlain.split('$');
+      const aesKey2 = await crypto.subtle.importKey('raw', bytesFromB64url(parts[1]), 'AES-GCM', false, ['decrypt']);
+      const wire = JSON.parse(wireBody);
+      const plain = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytesFromB64url(parts[2]), tagLength: 128 }, aesKey2, bytesFromB64url(wire.encrypted)));
+      steps.push({ ok: plain === plainBody, text: '联调全链路：模拟平台私钥解包 DEK → AES-GCM 解密 body' + (plain === plainBody ? '一致' : '不一致！') });
+    }
+
+    // 5. 渲染
+    wopCtx.lastDek = dek;
+    wopCtx.lastPlainBody = plainBody;
+    $('req-canonical').textContent = canonical;
+    const rows = Object.entries(headers).concat([['x-wop-sign', signHeader]]);
+    setRows('req-headers', rows);
+    $('req-wire-body').textContent = wireBody;
+    const curl = ['curl -X POST ' + shQuote(host + path), "-H 'content-type: application/json'"]
+      .concat(rows.map(([k, v]) => '-H ' + shQuote(k + ': ' + v)))
+      .concat(['--data-raw ' + shQuote(wireBody)]).join(' \\\n  ');
+    $('req-curl').textContent = curl;
+    $('req-out').classList.add('show');
+    renderSteps($('req-steps'), steps);
+    $('r-status').textContent = '构造完成';
+  } catch (e) {
+    steps.push({ ok: false, err: '构造失败：' + (e.message || e) });
+    renderSteps($('req-steps'), steps);
+    $('r-status').textContent = '';
+  }
+}
+
+/* ============ 验证平台报文（同步响应 / 异步回调，网关 → 商户） ============ */
+// canonical 的 URI：同步响应取网关请求路径；异步回调取商户回调 URL 的 path
+function verifyUri() {
+  const type = $('v-type').value;
+  if (type !== 'callback') return $('r-path').value.trim();
+  const u = new URL($('v-cburl').value.trim());
+  return u.pathname || '/';
+}
+
+async function verifyResponse() {
+  $('v-status').textContent = '';
+  const steps = [];
+  renderSteps($('resp-steps'), steps);
+  $('resp-out').classList.add('show');
+  let plainText = null;
+  try {
+    const body = $('v-body').value;
+    const vSign = $('v-sign').value.trim();
+    const vEncrypt = $('v-encrypt').value.trim();
+    const vNonce = $('v-nonce').value.trim();
+    const vTs = $('v-ts').value.trim();
+    const vSha = $('v-sha').value.trim();
+    if (!vSign) throw new Error('x-wop-sign 未填写');
+
+    // step1 摘要复核
+    const computed = await sha256Hex(body);
+    const dm = vSha.match(/^sha-256 ([0-9a-f]{64})$/);
+    const shaOk = !!dm && dm[1] === computed;
+    steps.push({ ok: shaOk, text: shaOk ? '摘要复核：sha-256(body) 与 x-wop-content-digest 一致'
+      : '摘要复核失败：header=' + (vSha || '空') + '，实际 sha-256=' + computed
+        + '（格式须为 sha-256 + 恰一空格 + 64 位小写 hex；body 可能被篡改或粘贴不完整）' });
+
+    // step2 解析签名头
+    const sp = vSign.indexOf(' ');
+    if (sp <= 0) throw new Error('x-wop-sign 缺少 securityReq 与 authString 的空格分隔');
+    const securityReq = vSign.slice(0, sp);
+    const seg = vSign.slice(sp + 1).trim().split('/');
+    if (seg.length !== 4) throw new Error('x-wop-sign 应为 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature>');
+    steps.push({ ok: true, text: '签名头解析：套件 ' + securityReq + '，authString ' + seg[0] + '/' + seg[1] });
+
+    // step3 重建 canonical 并用平台公钥验签
+    const signedNames = seg[2].split(';').map(s => s.trim()).filter(Boolean);
+    const avail = { 'x-wop-nonce': vNonce, 'x-wop-timestamp': vTs, 'x-wop-content-digest': vSha, 'x-wop-encrypt': vEncrypt };
+    const hmap = {};
+    for (const name of signedNames) {
+      if (!(name in avail)) throw new Error('signedHeaders 声明了本页未提供的标头: ' + name + '（请人工按 canonical 规则验签）');
+      hmap[name] = avail[name];
+    }
+    const canonical = buildCanonical(seg[0] + '/' + seg[1], 'POST', verifyUri(), '', canonicalHeaders(hmap));
+    $('resp-canonical').textContent = canonical;
+    const platformPubDer = keyInputToDer($('p-pub').value);
+    const verKey = await importPub(platformPubDer, 'verify');
+    const sigOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verKey, bytesFromB64url(seg[3]), new TextEncoder().encode(canonical));
+    steps.push({ ok: sigOk, text: sigOk ? '验签通过：平台公钥 SHA256withRSA 校验' + ($('v-type').value === 'callback' ? '回调' : '响应') + '签名'
+      : '验签失败：检查平台公钥是否匹配、报文类型/回调 URL 是否正确（canonical 的 URI 取自其 path）、头值是否复制完整' });
+
+    // step4 L2 解密
+    if (vEncrypt.toUpperCase().startsWith('L2')) {
+      const dekVal = vEncrypt.slice(vEncrypt.indexOf('dek=') + 4).trim();
+      const priv = await importPriv(keyInputToDer($('m-priv').value));
+      const payload = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, priv, bytesFromB64url(dekVal)));
+      const parts = payload.split('$');
+      if (parts.length !== 3) throw new Error('DEK 载荷格式错误，应为 alg$key$iv');
+      steps.push({ ok: true, text: 'DEK 解包：算法 ' + parts[0] + '（商户私钥 RSA-OAEP）' });
+      if (parts[0].toUpperCase() !== 'AES-256-GCM') throw new Error('暂不支持报文算法 ' + parts[0]);
+      const aesKey = await crypto.subtle.importKey('raw', bytesFromB64url(parts[1]), 'AES-GCM', false, ['decrypt']);
+      const wire = JSON.parse(body);
+      if (!wire.encrypted) throw new Error('响应体缺少 encrypted 字段');
+      plainText = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytesFromB64url(parts[2]), tagLength: 128 }, aesKey, bytesFromB64url(wire.encrypted)));
+      steps.push({ ok: true, text: 'AES-256-GCM 解密成功（GCM tag 校验通过）' });
+    } else {
+      plainText = body;
+      steps.push({ text: 'L0 明文报文，跳过解密' });
+    }
+    $('resp-plain').textContent = plainText;
+    $('resp-plain-wrap').style.display = '';
+    renderSteps($('resp-steps'), steps);
+    $('v-status').textContent = steps.every(s => s.ok !== false) ? '验证通过' : '存在失败项';
+  } catch (e) {
+    steps.push({ ok: false, err: '验证失败：' + (e.message || e) });
+    renderSteps($('resp-steps'), steps);
+  }
+}
+
+/* ============ 模拟平台报文（响应 / 回调，联调闭环） ============ */
+async function simulateResponse(kind) {
+  $('v-status').textContent = '';
+  const isCallback = kind === 'callback';
+  try {
+    if (!wopCtx.platformPriv) throw new Error('请先点击「生成联调平台密钥对」');
+    let plainResp;
+    let targetUri;
+    if (isCallback) {
+      const cbUrl = $('v-cburl').value.trim();
+      if (!/^https?:\/\//.test(cbUrl)) throw new Error('回调类型需填写完整回调 URL（http(s):// 开头）');
+      targetUri = new URL(cbUrl).pathname || '/';
+      plainResp = $('cb-body').value;
+      JSON.parse(plainResp);
+    } else {
+      targetUri = $('r-path').value.trim();
+      plainResp = JSON.stringify({ code: 'SUCCESS', message: 'simulated locally', model: JSON.parse($('r-body').value) });
+    }
+    // 复用入站 DEK（对应 CryptoFilter.post），IV 必须新生成
+    const cek = wopCtx.lastDek || randBytes(32);
+    const iv = randBytes(12);
+    const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, aesKey, new TextEncoder().encode(plainResp)));
+    const wire = '{"encrypted":"' + b64urlFromBytes(ct) + '"}';
+    const payload = 'AES-256-GCM$' + b64urlFromBytes(cek) + '$' + b64urlFromBytes(iv);
+    const merchantPubDer = pkcs8ToSpki(keyInputToDer($('m-priv').value));
+    const enc = await importPub(merchantPubDer, 'encrypt');
+    const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, enc, new TextEncoder().encode(payload)));
+    const encryptHeader = 'L2;dek=' + b64urlFromBytes(wrapped);
+
+    const headers = {
+      'x-wop-nonce': nonce32(),
+      'x-wop-timestamp': String(Date.now()),
+      'x-wop-content-digest': 'sha-256 ' + await sha256Hex(wire),
+      'x-wop-encrypt': encryptHeader
+    };
+    const canonical = buildCanonical('v1/1800', 'POST', targetUri, '', canonicalHeaders(headers));
+    const signKey = await importPrivSign(wopCtx.platformPriv);
+    const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, new TextEncoder().encode(canonical)));
+    const signHeader = $('r-suite').value + ' v1/1800/' + Object.keys(headers).sort().join(';') + '/' + b64urlFromBytes(sig);
+
+    $('v-sign').value = signHeader;
+    $('v-encrypt').value = encryptHeader;
+    $('v-nonce').value = headers['x-wop-nonce'];
+    $('v-ts').value = headers['x-wop-timestamp'];
+    $('v-sha').value = headers['x-wop-content-digest'];
+    $('v-body').value = wire;
+    await verifyResponse();
+
+    // 回调：生成「平台 → 商户」curl，商户可直接打自己的接收端点自测
+    if (isCallback) {
+      const cbUrl = $('v-cburl').value.trim().replace(/\/+$/, '');
+      const rows = Object.entries(headers).concat([['x-wop-sign', signHeader]]);
+      const curl = ['curl -X POST ' + shQuote(cbUrl), "-H 'content-type: application/json'"]
+        .concat(rows.map(([k, v]) => '-H ' + shQuote(k + ': ' + v)))
+        .concat(['--data-raw ' + shQuote(wire)]).join(' \\\n  ');
+      $('cb-curl').textContent = curl;
+      $('cb-curl-wrap').hidden = false;
+    } else {
+      $('cb-curl-wrap').hidden = true;
+    }
+  } catch (e) {
+    const steps = [{ ok: false, err: '模拟失败：' + (e.message || e) }];
+    renderSteps($('resp-steps'), steps);
+    $('resp-out').classList.add('show');
+  }
+}
+
+/* ============ Tab 与事件绑定 ============ */
+document.querySelectorAll('#tabbar button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('active', b === btn));
+    $('tab-keygen').hidden = btn.dataset.tab !== 'keygen';
+    $('tab-request').hidden = btn.dataset.tab !== 'request';
+  });
+});
+
+$('m-priv').addEventListener('change', refreshMerchantFp);
+
+// 平台公钥被手动替换后，配对联调私钥即失效（避免全链路自检误报 DEK 解包失败）
+$('p-pub').addEventListener('change', async () => {
+  if (!wopCtx.platformPriv) return;
+  try {
+    const cur = keyInputToDer($('p-pub').value);
+    if (cur.length !== wopCtx.platformPubDer.length || cur.some((b, i) => b !== wopCtx.platformPubDer[i])) {
+      wopCtx.platformPriv = null;
+      wopCtx.platformPubDer = null;
+      toast('已检测到手动替换平台公钥，联调私钥已清除（全链路自检与模拟响应需重新生成联调密钥对）');
+    }
+  } catch (e) { /* 输入暂不完整，不动 */ }
+});
+
+$('import-keygen').addEventListener('click', () => {
+  if (!state.pkcs8) { toast('请先在「密钥生成」页生成密钥对'); return; }
+  $('m-priv').value = toPem('PRIVATE KEY', state.pkcs8);
+  refreshMerchantFp();
+  toast('已带入商户私钥');
+});
+
+$('gen-platform').addEventListener('click', async () => {
+  try {
+    const bits = 3072;
+    const kp = await crypto.subtle.generateKey(
+      { name: 'RSA-OAEP', modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+      true, ['encrypt', 'decrypt']);
+    wopCtx.platformPriv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+    wopCtx.platformPubDer = new Uint8Array(await crypto.subtle.exportKey('spki', kp.publicKey));
+    $('p-pub').value = toPem('PUBLIC KEY', wopCtx.platformPubDer);
+    toast('已生成联调平台密钥对（仅本会话内存）');
+  } catch (e) { toast('生成失败：' + (e.message || e)); }
+});
+
+$('build-req').addEventListener('click', buildRequest);
+$('verify-resp').addEventListener('click', () => verifyResponse());
+$('sim-resp').addEventListener('click', () => simulateResponse('response'));
+$('sim-cb').addEventListener('click', () => simulateResponse('callback'));
+
+// 报文类型切换：回调时展示回调明文样例与回调 URL 输入强调
+$('v-type').addEventListener('change', () => {
+  const isCb = $('v-type').value === 'callback';
+  $('cb-sample-wrap').hidden = !isCb;
+});
+
+
+</script>
+</body>
+</html>
