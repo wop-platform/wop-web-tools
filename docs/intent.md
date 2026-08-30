@@ -1,6 +1,6 @@
 # WOP Web Tools — Intent
 
-> 状态：草案（grill 后修订） · 日期：2026-08-30 · 归属：wop-platform 生态
+> 状态：草案（grill 修订 v2） · 日期：2026-08-30 · 归属：wop-platform 生态
 
 ## 1. 缘起
 
@@ -22,15 +22,19 @@ wop-platform 组织（GitHub 公开）已存在完整生态：
 
 | 层 | 真源 | 状态 |
 |---|---|---|
-| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，**三套件冻结**：RSA3072 / RSA4096 / SM2-SM3 |
-| SDK 契约 | wop-specs / wop-sdk-spec | v1.0-ratified |
-| 官方 SDK | 六语言（java/go/ts/py/php/dotnet） | 4 个已支持 SM2 套件 |
+| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，三套件冻结：RSA3072 / RSA4096 / SM2-SM3 |
+| SDK 契约 | wop-specs / wop-sdk-spec | **v1.0-ratified**：F3 结构化 x-wop-sign、**F6 响应/回调校验语义已冻结**（verifyCallback(headers, body, callbackPath)，顺序钉死：验签→digest 复核→DEK 解包→alg 族比对→bulk 解密）、F8 字节级向量合规 |
+| 官方 SDK | 六语言（java/go/ts/py/php/dotnet） | 4 个已支持 SM2；TS/PHP 按 Q7 裁决首版仅 RSA、国密列路线图 |
 | 技能层 | wop-skills（wop-cli 八件套 + 安全纪律 S1–S8） | 73 测试全绿，覆盖率门禁 |
 
 **本项目生态位**：浏览器端零安装图形化工作台，与 wop-cli **互补**：
 
 - wop-cli：终端/Agent 场景；生产级密钥管理（0600 文件、S1–S8）；批量/脚本化。
 - wop-web-tools：人肉场景；零安装零依赖；教学演示；**单文件可离线分发**；产出 curl / 代码片段。
+
+**关键事实（grill 修正）**：HTML 内嵌「回调协议推演、尚未冻结」标注相对已批准 spec（v1.0-ratified F3/F6）
+**已过时**。新项目**对齐已批准 spec**，不迁移内嵌推演语义；页面验证步骤顺序须与 F6 一致
+（当前页面先摘要复核后验签，与 F6 相反，迁移时纠正）。
 
 ## 3. 问题定义
 
@@ -55,18 +59,19 @@ wop-platform 组织（GitHub 公开）已存在完整生态：
 - 不替代 wop-specs（协议真源）；本项目**消费真源、反向对齐**；
 - 不引入任何后端服务（纯静态，GitHub Pages 可承载）。
 
-## 6. 关键决策点（grill 产出，TBD 待拍板）
+## 6. 关键决策点（grill 产出）
 
-| # | 决策点 | 默认建议 |
+| # | 决策点 | 结论 |
 |---|---|---|
-| D1 | 回调契约未冻结，公开策略 | 显著 beta 标注，不宣称正式（见 spec S6） |
-| D2 | SM2 支持 vs 零依赖 | P0 引入审计过密码库，版本锁定；更正页面"仅支持 3072/4096"过时文案 |
-| D3 | 仓库归属 | wop-platform 组织（与 specs/skills 同层），仓库名 `wop-web-tools` |
-| D4 | 语言 | 中文优先（商户群体国内），英文列入路线图 |
-| D5 | 单文件 vs 模块化 | 源码多文件 + 构建产物单文件（保留离线卖点） |
-| D6 | 零网络 vs 在线数据 | 默认零网络，数据字典（错误码/API 目录）内置打包随版本 |
-| D7 | 私钥交付安全模型 | 复制/下载即唯一副本提示；引导离线备份；禁止诱导上传 |
+| D1 | 回调语义 | **已定**：对齐 v1.0-ratified F3/F6（verifyCallback 语义 + F6 顺序），迁移即纠正页面推演标注与步骤顺序 |
+| D2 | SM2 支持时机 | 待拍板：遵循 Q7 裁决精神默认「首版仅 RSA、国密列路线图」（WebCrypto 无 SM2/SM3/SM4，浏览器侧需三方库，属 scope 决策） |
+| D3 | 仓库归属 | 待拍板：默认 wop-platform 组织，仓库名 `wop-web-tools` |
+| D4 | 语言 | **已定**（循 wop-platform 惯例）：README 中文默认 + README.en.md |
+| D5 | 产物形态 | 默认：源码多文件 + 构建产物单文件（保留离线卖点） |
+| D6 | 数据来源 | 默认：零网络，数据字典内置打包随版本 |
+| D7 | 私钥交付 | 默认：复制/下载即唯一副本提示；引导离线备份；禁止诱导上传 |
+| D8 | 仓惯例 | **已定**（循 wop-platform 惯例）：MIT License、README 中英（四段必备）、`vectors/crypto-vectors.json` fixture 禁手改、字节级向量自测（F8 语义，正/负向量） |
 
 ## 7. 后续
 
-- spec 批准 → P0 实现 → 发布 GitHub + Pages → 原仓删除文件并更新引用。
+- spec 批准 → P0 实现（含页面语义对齐与步骤顺序纠正）→ 发布 GitHub + Pages → 原仓删除文件并更新引用。
