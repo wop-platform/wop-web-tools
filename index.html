@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>WOP 商户 RSA 密钥生成器</title>
 <style>
   :root {
@@ -1266,7 +1267,7 @@ async function runSelftest() {
 // spec:S1/S2 —— 页面源码自扫描器：外部资源引用 / 网络 API / 存储 API（禁词拼接防自命中；文案在函数内随自身剔除）
 function scanSelfForBanned() {
   const SRC = document.documentElement.outerHTML.replace(scanSelfForBanned.toString(), '');
-  const extRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*(?:src|href)\s*=/g;
+  const extRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*(?:src|href)\s*=\s*(?!data:)/g;
   const extHits = [...SRC.matchAll(extRe)].map(m => m[0].slice(0, 60));
   const netWords = ['fet' + 'ch(', 'X' + 'MLHttpRequest', 'Web' + 'Socket', 'Event' + 'Source', 'send' + 'Beacon'];
   const netHits = netWords.filter(w => SRC.includes(w));
