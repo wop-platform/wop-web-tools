@@ -1,8 +1,9 @@
 # WOP Web Tools — Spec
 
-> 状态：草案（grill 修订 v2） · 版本：v0.2-draft · 日期：2026-08-30
+> 状态：草案（grill 修订 v3） · 版本：v0.3-draft · 日期：2026-08-31
 > 对齐：crypto-strategy-spec v0.3-reviewed · **wop-sdk-spec v1.0-ratified（F3/F6/F8）** · wop-skills SECURITY.md S1–S8
 > 条款编号用 `WF`（Web Function）前缀，避免与 wop-sdk-spec 的 F1–F9 混淆。
+> v0.3 变更：WF7 粘贴解析、WF8 错误诊断由 P1 提前至 P0 并已落地（2026-08-31 增强批次）。
 
 ## 0. 参考真源
 
@@ -56,11 +57,17 @@
   真源为 wop-specs/crypto/crypto-vectors.json），页面一键跑**字节级**断言：
   正向量（签名/密文/摘要/DEK 组装一致）+ 负向量（tamper/跨族/错长度/带 `=` base64 拒绝），
   通过才提示「本工具与官方规格对齐」（对齐 SDK spec F8 语义）；向量版本号随发布物声明。
+- **WF7 整体粘贴解析**：粘贴原始 HTTP 报文（请求/响应/回调方向通用：起始行 + 头 + 空行 + body），
+  解析自动填充验证区各头字段与报文体；缺失必填头 / 值格式非法（digest 头、L2;dek=、时间戳）逐项提示；
+  解析仅本地字符串处理，不触碰密钥材料（S1/S2 不受影响）。
+- **WF8 错误诊断**：粘贴错误响应信封 / 完整错误报文 / 裸错误码 → 按内置 62 码公共契约字典
+  （对齐网关 GatewayExceptionEnum，分类/对外语义冻结）输出：含义、处置建议、归属、可重试性；
+  未知码按段号分类提示；支持 traceId 携带引导；平台解密类（5003/5010/5012/5014）覆盖为商户自查提示。
 
 **P1（路线图一期）**
 
-- **WF7 整体粘贴解析**：粘贴原始 HTTP 请求（含全部头 + 体）自动拆分填入验证表单，免手抄头。
-- **WF8 错误诊断**：粘贴错误响应 → 语义 + HTTP 映射 + 修复建议 + 排查路径（对齐 wop-troubleshoot 62 错误码目录）。
+- ~~**WF7 整体粘贴解析**：粘贴原始 HTTP 请求（含全部头 + 体）自动拆分填入验证表单，免手抄头。~~
+- ~~**WF8 错误诊断**：粘贴错误响应 → 语义 + HTTP 映射 + 修复建议 + 排查路径（对齐 wop-troubleshoot 62 错误码目录）。~~
 - **WF9 代码片段生成**：同一请求产出六语言官方 SDK 调用片段（语义对齐 wop-sdk-spec，非手写易错版）。
 - **WF10 canonical 可视化**：canonicalRequest 逐段高亮展示 + 字段来源标注，定位签名偏差。
 
@@ -123,6 +130,8 @@
 | WF6 aesgcm | `// spec:WF6.aesgcm` | 密文\|\|tag 字节级 | 正向量 |
 | WF6 dek | `// spec:WF6.dek` | DEK 三段式 + OAEP 解包 + MGF1 陷阱拒绝 | 正/负向量 |
 | WF6 formatRules | `// spec:WF6.formatRules` | 11 条：族比对推导 accept/reject | 正/负向量 |
+| WF7 粘贴解析 | `// spec:WF7`（fillVerifyFromWire） | 报文→字段填充 + 缺头/格式诊断（digest/L2;dek=/ts） | 功能+否定式 |
+| WF8 错误诊断 | `// spec:WF8`（diagnoseError） | 62 码字典命中/未知码分类/覆盖码/信封与报文识别 | 功能+否定式 |
 | S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
 | S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
 | G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
@@ -160,5 +169,5 @@
   G1–G6 归属 / Pages / 对齐 / 版本 / 测试载体 / 仓惯例
 ```
 
-优先级：P0 = 现有两场景上线 + WF5 顺序纠正 + WF6 向量自测（堵缺口、立信任）
-→ P1 = WF7–WF10（粘贴解析、诊断、片段、可视化）→ P2 = WF11–WF14（目录、教学、SM2、i18n）。
+ 优先级：P0 = 现有两场景上线 + WF5 顺序纠正 + WF6 向量自测 + WF7 粘贴解析 + WF8 错误诊断（2026-08-31 落地）
+→ P1 = WF9–WF10（代码片段、canonical 可视化）→ P2 = WF11–WF14（目录、教学、SM2、i18n）。

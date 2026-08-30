@@ -295,6 +295,16 @@
       <section class="card">
         <h2>3. 验证平台报文（同步响应 / 异步回调）</h2>
         <p class="inline-note">粘贴平台侧报文（网关同步响应，或平台主动发起的异步回调）的头与体，逐项复核验签 / 摘要 / 解密。两类报文处理逻辑一致，仅 canonical 的 URI 不同：响应取网关 API 路径，回调取回调 URL 的 path。联调模式下也可直接本地模拟闭环。<br><b>校验顺序对齐 wop-sdk-spec v1.0-ratified（F6）：验签 → digest 复核 → DEK 解包 → alg 族比对 → bulk 解密。</b></p>
+        <details class="paste-card" style="margin-bottom:12px">
+          <summary>粘贴原始 HTTP 报文，自动解析填充（可选）</summary>
+          <p class="inline-note">支持商户请求与平台响应（同步 / 异步回调）两个方向的 HTTP/1.1 报文：起始行 + 头 + 空行 + body。解析后自动填入下方各头字段与报文体；缺失或格式非法的字段逐项提示。</p>
+          <textarea id="wire-paste" class="small" spellcheck="false" placeholder="POST /gateway/logistics.waybill.sync HTTP/1.1&#10;x-wop-appkey: demo_app_key&#10;x-wop-content-digest: sha-256 （64 位 hex）&#10;x-wop-encrypt: L2;dek=…&#10;x-wop-nonce: …&#10;x-wop-timestamp: （毫秒时间戳）&#10;x-wop-sign: WOP-RSA3072-SHA256 v1/1800/x-wop-content-digest;x-wop-encrypt;x-wop-nonce;x-wop-timestamp/…&#10;&#10;{&quot;encrypted&quot;:&quot;…&quot;}"></textarea>
+          <div class="actions" style="margin-top:8px">
+            <button class="primary" id="parse-wire">解析并填充验证区</button>
+            <span id="wire-status" style="font-size:13px;color:var(--muted)"></span>
+          </div>
+          <ul class="steps" id="wire-steps"></ul>
+        </details>
         <div class="grid3" style="margin-top:8px">
           <div class="field"><label for="v-type">报文类型</label>
             <select id="v-type">
@@ -337,7 +347,16 @@
           <details class="debug"><summary>调试：报文 canonicalRequest</summary><pre id="resp-canonical"></pre></details>
           <details class="debug" id="cb-curl-wrap" hidden><summary>平台 → 商户回调 curl（用于自测您的回调接收端点；报文格式为推演契约）</summary><pre id="cb-curl"></pre></details>
         </section>
-      </div>
+      <section class="card">
+        <h2>平台错误码诊断（62 码公共契约字典）</h2>
+        <p class="inline-note">粘贴平台返回的错误响应信封 <code>{"code":"OP_GW_1022","msg":"…","traceId":"…"}</code>（或整个错误响应报文、裸错误码），给出类别、含义、处置建议与可重试性。字典对齐网关公共契约（62 码，分类/对外语义冻结）。</p>
+        <textarea id="err-json" class="small" spellcheck="false" placeholder='{"code":"OP_GW_1022","msg":"签名验证失败","traceId":"…"}'></textarea>
+        <div class="actions" style="margin-top:8px">
+          <button class="primary" id="diag-err">诊断</button>
+          <span id="err-status" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+        <div id="err-out"></div>
+      </section>
 
     </div>
   </div><!-- /tab-request -->
@@ -736,6 +755,199 @@ async function refreshMerchantFp() {
   }
 }
 
+const WOP_ERRORS = {
+  'OP_GW_1001': { d: 'appKey 为空或应用不存在', t: 'BIZ', s: '检查 x-wop-appkey 是否正确传递' },
+  'OP_GW_1002': { d: '应用已停用', t: 'BIZ', s: '检查应用状态，联系运营启用' },
+  'OP_GW_1003': { d: '无 API 权限（未授权或已过期）', t: 'BIZ', s: '检查应用是否已授权该 API 且授权在有效期内' },
+  'OP_GW_1005': { d: 'IP 白名单未通过', t: 'BIZ', s: '检查客户端 IP 是否在应用白名单中' },
+  'OP_GW_1006': { d: '签名校验失败', t: 'BIZ', s: '检查签名算法、密钥及待签名串拼接规则' },
+  'OP_GW_1007': { d: '签名时效过期（timestamp 超出窗口）', t: 'BIZ', s: '检查 x-wop-timestamp（毫秒时间戳）与服务器时间差是否在 expiredSeconds 窗口内' },
+  'OP_GW_1008': { d: 'IP 黑名单拦截', t: 'BIZ', s: '请求 IP 命中平台黑名单' },
+  'OP_GW_1009': { d: 'nonce 重复（防重放）', t: 'BIZ', s: '检查 nonce 是否已使用过' },
+  'OP_GW_1010': { d: '缺少 x-wop-sign 请求头', t: 'BIZ', s: '检查签名头是否携带' },
+  'OP_GW_1011': { d: 'x-wop-sign 格式错误', t: 'BIZ', s: '检查 securityReq 与 authString 的空格分隔及 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature> 四段结构' },
+  'OP_GW_1012': { d: '不支持的签名协议版本', t: 'BIZ', s: '检查 protocolVersion 是否为 v1' },
+  'OP_GW_1013': { d: 'securityReq 无法识别或格式错误', t: 'BIZ', s: '检查 securityReq 是否为 WOP-<密钥算法>-<摘要算法> 结构' },
+  'OP_GW_1014': { d: '不支持的密钥算法/摘要算法或密钥长度非法', t: 'BIZ', s: '检查支持的套件组合（RSA3072/RSA4096/SM2）' },
+  'OP_GW_1015': { d: '签名时效参数非法（expiredSeconds 缺失/超范围）', t: 'BIZ', s: '检查 expiredSeconds 取值在 (0, 86400] 秒' },
+  'OP_GW_1016': { d: 'signature 为空', t: 'BIZ', s: '检查签名串是否完整' },
+  'OP_GW_1017': { d: 'signedHeaders 缺失或声明不完整', t: 'BIZ', s: '检查 signedHeaders 必含标头及 x-wop-encrypt 参与签名' },
+  'OP_GW_1018': { d: '请求体摘要缺失或不匹配', t: 'BIZ', s: '检查 x-wop-content-sha256 与请求体是否一致' },
+  'OP_GW_1019': { d: '缺少 x-wop-nonce（防重放参数缺失）', t: 'BIZ', s: '检查 nonce 头是否携带' },
+  'OP_GW_1020': { d: '应用未配置 IP 白名单', t: 'BIZ', s: '联系运营在应用白名单中配置允许 IP' },
+  'OP_GW_1021': { d: '老商户固定密钥认证失败（fixed-key 不匹配）', t: 'BIZ', s: '检查 fixed-key 与平台登记的 appSecret 是否一致' },
+  'OP_GW_1022': { d: '签名验证失败', t: 'BIZ', s: '检查签名密钥与签名串组装是否符合协议文档' },
+  'OP_GW_1023': { d: '请求体摘要缺失或不匹配（x-wop-content-digest）', t: 'BIZ', s: '检查 x-wop-content-digest 值：<sha-256|sm3> + 恰一空格 + 64 位小写 hex，摘要对象为请求体线上原始字节' },
+  'OP_GW_2001': { d: '必填字段缺失', t: 'BIZ', s: '检查 api_para 表中 must_fill_flag=1 的字段是否传递' },
+  'OP_GW_2002': { d: '加密指令解析失败', t: 'BIZ', s: '检查 x-wop-encrypt Header 格式是否正确' },
+  'OP_GW_2003': { d: 'L2 加密指令缺少 dek', t: 'BIZ', s: '检查 L2 加密请求是否携带 x-wop-encrypt 的 dek 段' },
+  'OP_GW_2004': { d: 'DEK alg 与套件族不符', t: 'BIZ', s: '检查 x-wop-encrypt 的 dek 段 alg：RSA 族须 AES-256-GCM，SM2 族须 SM4-GCM（公开映射知识）' },
+  'OP_GW_2005': { d: '解密失败', t: 'BIZ', s: '检查加密密钥与加密指令是否符合协议文档' },
+  'OP_GW_2006': { d: '请求体超过大小上限', t: 'BIZ', s: '检查请求体大小：按线上总字节计（含 Base64 膨胀）不超过 10MB' },
+  'OP_GW_3001': { d: '接口状态不允许调用（草稿/已下线）', t: 'BIZ', s: '检查接口发布状态' },
+  'OP_GW_3002': { d: '能力包未启用', t: 'BIZ', s: '检查能力表状态' },
+  'OP_GW_4001': { d: '下游服务超时（含重试耗尽）', t: 'EXT', s: '检查下游服务响应时间及网络连通性' },
+  'OP_GW_4002': { d: '下游服务不可达', t: 'EXT', s: '检查下游服务状态及路由地址配置' },
+  'OP_GW_4003': { d: '下游响应为空', t: 'EXT', s: '检查下游服务返回内容' },
+  'OP_GW_4004': { d: '下游连接失败/超时（重试耗尽）', t: 'EXT', s: '检查下游服务状态及网络连通性' },
+  'OP_GW_4005': { d: '路由调用异常（响应解析等客户端异常）', t: 'EXT', s: '检查下游服务响应格式及网关配置' },
+  'OP_GW_5001': { d: '系统内部异常', t: 'SYS', s: '联系运维或开发排障，请携带 traceId' },
+  'OP_GW_5002': { d: '配置缺失（路由配置为空等）', t: 'DAT', s: '检查 API 定义中域名和路径配置' },
+  'OP_GW_5003': { d: '请求解密失败（DEK 解包失败）', t: 'SYS', s: '检查密钥集与加密算法是否匹配' },
+  'OP_GW_5004': { d: '响应加密失败', t: 'SYS', s: '检查密钥与算法配置' },
+  'OP_GW_5005': { d: '密钥已过期且无可用密钥', t: 'BIZ', s: '检查 app_secret 表中是否有有效密钥集' },
+  'OP_GW_5006': { d: '字段映射失败（类型转换错误）', t: 'DAT', s: '检查 api_field_mapp 表字段类型与请求值格式' },
+  'OP_GW_5007': { d: '响应为空（Pipeline 无输出）', t: 'SYS', s: '联系运维排查响应链路' },
+  'OP_GW_5008': { d: '后端服务 URL 或 API 路径为空', t: 'DAT', s: '检查后端服务地址与 API 路径配置' },
+  'OP_GW_5009': { d: 'API 无全量发布版本', t: 'DAT', s: '检查 API 是否存在已发布的全量版本' },
+  'OP_GW_5010': { d: '解密未找到匹配密钥集', t: 'SYS', s: '检查密钥集与验签命中的密钥是否一致' },
+  'OP_GW_5011': { d: '无法确定解密算法套件', t: 'SYS', s: '检查加密指令与密钥套件配置' },
+  'OP_GW_5012': { d: '密钥集缺少平台私钥', t: 'SYS', s: '检查密钥集中是否登记平台私钥' },
+  'OP_GW_5013': { d: 'L2 请求体缺少 encrypted 密文字段', t: 'SYS', s: '检查 L2 报文包装格式' },
+  'OP_GW_5014': { d: '解密引擎执行失败', t: 'SYS', s: '检查密钥与算法参数是否正确' },
+  'OP_GW_5015': { d: '无法确定加密套件', t: 'SYS', s: '检查出站加密指令与密钥套件配置' },
+  'OP_GW_5016': { d: '响应 DEK 包裹失败', t: 'SYS', s: '检查商户公钥与算法配置' },
+  'OP_GW_5017': { d: '无法确定出站签名套件', t: 'SYS', s: '检查入站签名套件是否在上下文中保留' },
+  'OP_GW_5018': { d: '出站加签失败', t: 'SYS', s: '联系运维排查出站签名链路' },
+  'OP_GW_5019': { d: '出站加签未找到匹配密钥集', t: 'DAT', s: '检查密钥集与入站验签是否一致' },
+  'OP_GW_5020': { d: '出站加签密钥已失效', t: 'DAT', s: '检查密钥有效期配置' },
+  'OP_GW_5021': { d: '出站加签密钥集缺少平台私钥', t: 'DAT', s: '检查密钥集中是否登记平台私钥' },
+  'OP_GW_5022': { d: '字段目标路径结构冲突', t: 'DAT', s: '检查 api_field_mapp 目标路径与报文结构是否匹配' },
+  'OP_GW_5023': { d: '字段路径表达式非法', t: 'DAT', s: '检查 api_field_mapp 路径表达式语法' },
+  'OP_GW_5024': { d: '出参映射失败', t: 'DAT', s: '检查 api_field_mapp 出参规则与下游响应格式' },
+  'OP_GW_9001': { d: '请求限流（达到 QPS 配额）', t: 'BIZ', s: '降低请求频率，稍后重试' },
+  'OP_GW_9002': { d: '接口熔断中', t: 'BIZ', s: '等待熔断恢复后重试' },
+  'OP_GW_9003': { d: '后端服务并发已达上限', t: 'BIZ', s: '降低并发或联系运维调整后端服务 maxConcurrent 配置' },
+};
+
+// —— WF8 错误码分类段（wop-specs 冻结分类：编号归属实现、分类/对外语义冻结）——
+const ERR_SEG = {
+  '1': { name: '鉴权 / 认证（签名、密钥、防重放、IP 白名单）', scope: '商户自查后重试', retry: false },
+  '2': { name: '参数校验 / 加密协议（格式、DEK、解密）', scope: '商户自查后重试', retry: false },
+  '3': { name: '业务规则（接口状态、能力包）', scope: '按提示处理，必要时联系平台', retry: false },
+  '4': { name: '依赖方异常（下游超时 / 不可达）', scope: '稍后重试；持续则携带 traceId 联系平台', retry: true },
+  '5': { name: '平台内部错误（配置 / 密钥集 / 映射）', scope: '携带 traceId 联系平台', retry: false },
+  '9': { name: '限流 / 降级', scope: '稍后重试', retry: true },
+};
+// 个别覆盖：平台侧解密链路（DEK 解包）可能与商户使用的公钥配置相关，商户可先自查
+const ERR_OVERRIDE = {
+  'OP_GW_5003': { scope: '检查是否用平台下发的正确公钥加密；仍失败则携带 traceId 联系平台' },
+  'OP_GW_5010': { scope: '检查密钥集与验签命中密钥是否一致；必要时联系平台' },
+  'OP_GW_5012': { scope: '检查平台密钥集是否登记平台私钥；必要时联系平台' },
+  'OP_GW_5014': { scope: '检查密钥与算法参数；必要时联系平台' },
+};
+
+// —— WF7 原始 HTTP 报文解析（起始行 + 头 + 空行 + body，请求/响应方向通用）——
+function parseWireMessage(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const out = { start: '', headers: {}, body: '', errors: [] };
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  if (i >= lines.length) { out.errors.push('空输入：未找到起始行'); return out; }
+  out.start = lines[i].trim(); i++;
+  if (!/^(?:[A-Z]+\s+\S+\s+HTTP\/1\.[01]|HTTP\/1\.[01]\s+\d{3})/.test(out.start)) {
+    out.errors.push('起始行无法识别：' + out.start.slice(0, 60) + '（应为「METHOD 路径 HTTP/1.1」或「HTTP/1.1 状态码」）');
+  }
+  for (; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l.trim()) { i++; break; }
+    const m = /^([^:\s]+):\s*(.*)$/.exec(l);
+    if (!m) { out.errors.push('非法头行（缺少冒号分隔）：' + l.slice(0, 60)); continue; }
+    out.headers[m[1].toLowerCase()] = m[2].trim();
+  }
+  out.body = lines.slice(i).join('\n').trim();
+  return out;
+}
+
+// spec:WF7 —— 粘贴报文 → 解析 → 填充验证区（含缺头/格式诊断）
+function fillVerifyFromWire() {
+  const st = [];
+  const w = parseWireMessage($('wire-paste').value);
+  if (w.errors.length) {
+    for (const e of w.errors) st.push({ ok: false, text: '报文解析：' + e });
+    renderSteps($('wire-steps'), st);
+    $('wire-status').textContent = '解析未完全成功，已填充可识别字段';
+    return;
+  }
+  const H = w.headers;
+  const map = { 'x-wop-sign': 'v-sign', 'x-wop-encrypt': 'v-encrypt', 'x-wop-nonce': 'v-nonce', 'x-wop-timestamp': 'v-ts', 'x-wop-content-digest': 'v-sha' };
+  let filled = 0;
+  for (const [hk, vid] of Object.entries(map)) {
+    if (H[hk] !== undefined) { $(vid).value = H[hk]; filled++; }
+  }
+  if (w.body) { $('v-body').value = w.body; filled++; }
+  st.push({ ok: filled > 0, text: filled > 0 ? '已填充 ' + filled + ' 个字段' : '未识别到任何 WOP 头/报文体' });
+  const required = ['x-wop-sign', 'x-wop-content-digest', 'x-wop-nonce', 'x-wop-timestamp'];
+  const missing = required.filter(k => H[k] === undefined);
+  if (missing.length) st.push({ ok: false, text: '缺失必填头：' + missing.join(', ') + '（缺项无法完整验签，请补全或改为粘贴完整报文）' });
+  if (H['x-wop-content-digest'] !== undefined && !parseDigestHeader(H['x-wop-content-digest']).ok)
+    st.push({ ok: false, text: 'x-wop-content-digest 格式非法：应为 <sha-256|sm3> + 恰一空格 + 64 位小写 hex' });
+  if (H['x-wop-encrypt'] !== undefined && !/^L2;dek=[A-Za-z0-9_-]+$/.test(H['x-wop-encrypt']))
+    st.push({ ok: false, text: 'x-wop-encrypt 格式非法：应为 L2;dek=<base64url（RSA-OAEP 包装后的 DEK 密文）>' });
+  if (H['x-wop-sign'] !== undefined && !/^WOP-/.test(H['x-wop-sign']))
+    st.push({ ok: false, text: 'x-wop-sign 应以 securityReq（WOP-<算法>-<摘要>）开头，后接 v1/expiredSeconds/signedHeaders/signature' });
+  if (H['x-wop-timestamp'] !== undefined && !/^\d{10,13}$/.test(H['x-wop-timestamp']))
+    st.push({ ok: false, text: 'x-wop-timestamp 应为毫秒时间戳（13 位数字）' });
+  renderSteps($('wire-steps'), st);
+  $('wire-status').textContent = '完成，可点击「验证并解密」复核';
+}
+
+// spec:WF8 —— 平台错误码诊断（62 码公共契约字典 + 信封/报文粘贴识别）
+function diagnoseError() {
+  const raw = $('err-json').value.trim();
+  const out = $('err-out');
+  const st = [];
+  let code = null, msg = null, traceId = null;
+  if (!raw) { $('err-status').textContent = '请先粘贴错误响应信封或错误码'; return; }
+  // 尝试整体报文 → 取 body；或直接 JSON 信封；或裸错误码
+  const w = parseWireMessage(raw);
+  const body = (w.body || raw).trim();
+  try {
+    const j = JSON.parse(body);
+    code = j.code || code; msg = j.msg || j.message || null; traceId = j.traceId || null;
+  } catch (e) {
+    const m = /(OP_GW_\d{4}|OP_CB_\d{4})/.exec(raw);
+    if (m) code = m[1];
+  }
+  if (!code) {
+    st.push({ ok: false, text: '未识别到错误码：请粘贴 {"code":"OP_GW_xxxx",...} 信封、完整错误响应报文，或裸错误码' });
+    renderSteps(out, st);
+    $('err-status').textContent = '诊断失败';
+    return;
+  }
+  const info = WOP_ERRORS[code];
+  const seg = ERR_SEG[code.slice(6, 7)] || { name: '未知分类段', scope: '对照最新协议文档', retry: false };
+  const ov = ERR_OVERRIDE[code] || {};
+  const rows = [
+    ['错误码', code],
+    ['含义', info ? info.d : '（不在内置 62 码字典内 —— 新契约或非平台码，请对照最新文档）'],
+    ['分类', seg.name],
+    ['处置建议', info ? info.s : '——'],
+    ['归属', ov.scope || seg.scope],
+    ['可重试', seg.retry ? '可稍后重试' : '修复后重试（不建议直接重发原报文）'],
+  ];
+  if (traceId) rows.push(['traceId', traceId + '（联系平台排障时请附带）']);
+  out.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'card';
+  const badge = document.createElement('div');
+  badge.className = 'badge ' + (info ? 'ok' : 'err');
+  badge.textContent = info ? '字典命中：' + code : '未知码：' + code;
+  card.appendChild(badge);
+  const tb = document.createElement('table');
+  tb.className = 'kv';
+  for (const [k, v] of rows) {
+    const tr = document.createElement('tr');
+    const th = document.createElement('th'); th.textContent = k;
+    const td = document.createElement('td'); td.textContent = v;
+    tr.appendChild(th); tr.appendChild(td);
+    tb.appendChild(tr);
+  }
+  card.appendChild(tb);
+  out.appendChild(card);
+  $('err-status').textContent = info ? '命中公共契约字典' : '未命中（见提示）';
+}
+
 /* ============ 构造请求（商户 → 网关） ============ */
 async function buildRequest() {
   $('r-status').textContent = '';
@@ -1023,6 +1235,8 @@ $('gen-platform').addEventListener('click', async () => {
   } catch (e) { toast('生成失败：' + (e.message || e)); }
 });
 
+$('parse-wire').addEventListener('click', fillVerifyFromWire);
+$('diag-err').addEventListener('click', diagnoseError);
 $('build-req').addEventListener('click', buildRequest);
 $('verify-resp').addEventListener('click', () => verifyResponse());
 $('sim-resp').addEventListener('click', () => simulateResponse('response'));
@@ -1189,6 +1403,9 @@ const WOP_VECTORS = {
 
 async function runSelftest() {
   const steps = [];
+  // 先清空上次渲染结果：自测文案渲染进 DOM 会污染后续源码自扫描（S1/S2）
+  $('selftest-steps').innerHTML = '';
+  $('selftest-banner').textContent = '';
   const fail = (id, got, want) => steps.push({ ok: false, text: id + '：不匹配。期望 ' + want + '，实际 ' + got });
   const ok = (id, extra) => steps.push({ ok: true, text: id + (extra ? '：' + extra : '') });
   const V = WOP_VECTORS;
@@ -1267,7 +1484,7 @@ async function runSelftest() {
 // spec:S1/S2 —— 页面源码自扫描器：外部资源引用 / 网络 API / 存储 API（禁词拼接防自命中；文案在函数内随自身剔除）
 function scanSelfForBanned() {
   const SRC = document.documentElement.outerHTML.replace(scanSelfForBanned.toString(), '');
-  const extRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*(?:src|href)\s*=\s*(?!data:)/g;
+  const extRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*(?:src|href)\s*=\s*(?!\s*(?:"|')?\s*data:)/g;
   const extHits = [...SRC.matchAll(extRe)].map(m => m[0].slice(0, 60));
   const netWords = ['fet' + 'ch(', 'X' + 'MLHttpRequest', 'Web' + 'Socket', 'Event' + 'Source', 'send' + 'Beacon'];
   const netHits = netWords.filter(w => SRC.includes(w));
