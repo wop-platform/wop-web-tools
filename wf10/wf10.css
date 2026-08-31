@@ -1,0 +1,43 @@
+/* WF10 — canonicalRequest 逐段解析（仅 wf10-* 命名空间，避免与现有样式冲突） */
+.wf10-panel { margin-top: 10px; border: 1px solid var(--border, #e2e5ea); border-radius: 8px; padding: 10px 12px; background: var(--card, #fff); }
+.wf10-panel > summary { font-size: 13px; color: var(--muted, #6b7280); cursor: pointer; font-weight: 600; }
+.wf10-toolbar { display: flex; gap: 8px; align-items: center; margin: 10px 0 2px; flex-wrap: wrap; }
+.wf10-btn { font-size: 12px; padding: 4px 12px; }
+.wf10-mode { font-size: 12px; color: var(--muted, #6b7280); }
+.wf10-status { font-size: 12px; color: var(--success, #16a34a); }
+.wf10-hint { font-size: 12px; color: var(--muted, #6b7280); margin: 6px 0 0; }
+.wf10-segments { border: 1px solid var(--border, #e2e5ea); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+.wf10-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border, #e2e5ea); }
+.wf10-row:last-child { border-bottom: none; }
+.wf10-lineno { flex: 0 0 46px; display: flex; align-items: center; font: 11px/1.4 var(--mono, monospace); color: var(--muted, #6b7280); padding: 6px 8px; background: #fafbfc; border-right: 1px solid var(--border, #e2e5ea); }
+.wf10-type { flex: 0 0 168px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 6px 8px; }
+.wf10-text { flex: 1 1 auto; min-width: 0; font: 12px/1.6 var(--mono, monospace); color: var(--text, #1f2329); padding: 6px 10px; white-space: pre-wrap; word-break: break-all; }
+.wf10-src { flex: 0 0 300px; display: flex; align-items: center; font-size: 12px; color: var(--muted, #6b7280); padding: 6px 10px; border-left: 1px dashed var(--border, #e2e5ea); cursor: help; }
+.wf10-t-auth   { background: #f5f3ff; color: #7c3aed; }
+.wf10-t-method { background: #eff6ff; color: #2563eb; }
+.wf10-t-uri    { background: #ecfeff; color: #0e7490; }
+.wf10-t-qs     { background: #f3f4f6; color: #6b7280; }
+.wf10-t-header { background: #f0fdf4; color: #16a34a; }
+.wf10-empty-mark { color: var(--muted, #6b7280); font-style: italic; }
+.wf10-manual { margin-top: 12px; }
+.wf10-manual summary { font-size: 13px; color: var(--muted, #6b7280); cursor: pointer; }
+.wf10-manual textarea { min-height: 110px; margin-top: 8px; }
+.wf10-diff-out { margin-top: 8px; }
+.wf10-dsum { font-size: 12px; margin: 6px 0; color: var(--text, #1f2329); }
+.wf10-diff-row { display: flex; gap: 8px; align-items: baseline; font: 12px/1.6 var(--mono, monospace); padding: 3px 8px; border-radius: 4px; }
+.wf10-dstate { flex: 0 0 44px; font-size: 11px; font-weight: 600; }
+.wf10-dtext { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; word-break: break-all; }
+.wf10-d-same .wf10-dstate { color: var(--success, #16a34a); }
+.wf10-d-same .wf10-dtext { color: var(--text, #1f2329); background: #f0fdf4; }
+.wf10-d-diff { background: #fef2f2; }
+.wf10-d-diff .wf10-dstate { color: #dc2626; }
+.wf10-d-diff .wf10-dtext { color: #b91c1c; }
+.wf10-d-extra, .wf10-d-missing { background: #f3f4f6; }
+.wf10-d-extra .wf10-dstate, .wf10-d-missing .wf10-dstate { color: var(--muted, #6b7280); }
+.wf10-d-extra .wf10-dtext, .wf10-d-missing .wf10-dtext { color: var(--muted, #6b7280); text-decoration: line-through; }
+.wf10-note { font-size: 12px; color: var(--muted, #6b7280); margin: 10px 0 0; }
+@media (max-width: 900px) {
+  .wf10-row { flex-wrap: wrap; }
+  .wf10-src { flex: 1 1 100%; border-left: none; border-top: 1px dashed var(--border, #e2e5ea); }
+  .wf10-text { flex: 1 1 100%; }
+}

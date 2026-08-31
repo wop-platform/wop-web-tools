@@ -1,0 +1,21 @@
+<!-- WF10 — canonicalRequest 逐段解析 UI 片段
+     锚点建议：插入到 #tab-request 内 #req-out 的第一张 card（「构造结果」）中，
+     紧跟「调试：canonicalRequest」的 details.debug 之后（#req-canonical 所在块下方）。
+     集成者负责落位并在 DOM 就绪后调用 WF_REGISTRY['wf10'].init()。 -->
+<details id="wf10-root" class="wf10-panel">
+  <summary><span class="i18n" data-i18n="wf10.title">canonicalRequest 逐段解析</span><span class="i18n" data-i18n="wf10.subtitle">（每一行来自哪个字段）</span></summary>
+  <div class="wf10-toolbar">
+    <button type="button" id="wf10-refresh" class="wf10-btn"><span class="i18n" data-i18n="wf10.refresh">刷新</span></button>
+    <button type="button" id="wf10-copy" class="wf10-btn"><span class="i18n" data-i18n="wf10.copy">复制 canonicalRequest</span></button>
+    <span id="wf10-mode" class="wf10-mode"></span>
+    <span id="wf10-status" class="wf10-status" aria-live="polite"></span>
+  </div>
+  <div id="wf10-segments" class="wf10-segments"></div>
+  <details id="wf10-manual-box" class="wf10-manual">
+    <summary><span class="i18n" data-i18n="wf10.diff.title">差异检测：粘贴 / 修改你的 canonical，实时比对</span></summary>
+    <p class="wf10-hint"><span class="i18n" data-i18n="wf10.diff.hint">每行状态：绿 = 与自动生成一致；红 = 同位置内容有差异；灰 = 未参与（手工串多出的行，或自动生成有而手工串缺失的行）</span></p>
+    <textarea id="wf10-manual" spellcheck="false" placeholder="v1/1800&#10;POST&#10;/gateway/...&#10;(查询串，POST 为空)&#10;x-wop-appkey:...&#10;..."></textarea>
+    <div id="wf10-diff-out" class="wf10-diff-out"></div>
+  </details>
+  <p class="wf10-note" id="wf10-signednote"></p>
+</details>
