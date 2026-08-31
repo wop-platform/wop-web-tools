@@ -122,9 +122,11 @@
     });
   }
   function localCanonicalHeaders(map) {
-    var keys = Object.keys(map).map(function (k) { return String(k).trim().replace(/\s+/g, ' ').toLowerCase(); }).sort();
-    return keys.map(function (k) {
-      return localJavaUrlEncode(k) + ':' + localJavaUrlEncode(String(map[k] == null ? '' : map[k]).trim().replace(/\s+/g, ' '));
+    // 语义镜像全局 canonicalHeaders：逐项规范化键并携带各自值再排序（规范化键回查 map 会丢值）
+    var entries = Object.keys(map).map(function (k) { return [String(k).trim().replace(/\s+/g, ' ').toLowerCase(), map[k]]; });
+    entries.sort(function (a, b) { return (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return entries.map(function (e) {
+      return localJavaUrlEncode(e[0]) + ':' + localJavaUrlEncode(String(e[1] == null ? '' : e[1]).trim().replace(/\s+/g, ' '));
     }).join('\n');
   }
   function localBuildCanonical(auth, method, path, qs, ch) {
@@ -241,6 +243,13 @@
         em.className = 'wf10-empty-mark';
         em.textContent = t('wf10.emptyline', '(空行：POST 查询串为空)');
         tx.appendChild(em);
+      } else if (state.mode === 'preview' && seg.type === 'header' && seg.name === 'x-wop-content-digest') {
+        // spec:WF10 —— 预览模式摘要为估算值：渲染层加显著前缀（autoText 真值不动，diff 比对不受影响）
+        var warn = document.createElement('b');
+        warn.style.color = '#dc2626';
+        warn.textContent = t('wf10.digest.preview', '⚠ 非最终值（预览按明文 body 估算）');
+        tx.appendChild(warn);
+        tx.appendChild(document.createTextNode(' ' + seg.text));
       } else {
         tx.textContent = seg.text;
       }

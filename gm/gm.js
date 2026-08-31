@@ -39,8 +39,11 @@
   }
   function trimall(s) { return String(s == null ? '' : s).trim().replace(/\s+/g, ' '); }
   function chLocal(map) {
-    return Object.keys(map).sort().map(function (k) {
-      return k + ':' + javaUrlEncode(trimall(map[k]));
+    // 语义镜像全局 canonicalHeaders：逐项规范化键并携带各自值再排序；键同样过 javaUrlEncode
+    var entries = Object.keys(map).map(function (k) { return [trimall(k).toLowerCase(), map[k]]; });
+    entries.sort(function (a, b) { return (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return entries.map(function (e) {
+      return javaUrlEncode(e[0]) + ':' + javaUrlEncode(trimall(e[1]));
     }).join('\n');
   }
   function canonLocal(auth, method, path, qs, ch) {

@@ -836,6 +836,7 @@
           <details class="debug"><summary>调试：报文 canonicalRequest</summary><pre id="resp-canonical"></pre></details>
           <details class="debug" id="cb-curl-wrap" hidden><summary>平台 → 商户回调 curl（用于自测您的回调接收端点；报文格式为推演契约）</summary><pre id="cb-curl"></pre></details>
         </section>
+      </div>
       <section class="card">
         <h2>平台错误码诊断（62 码公共契约字典）</h2>
         <p class="inline-note">粘贴平台返回的错误响应信封 <code>{"code":"OP_GW_1022","msg":"…","traceId":"…"}</code>（或整个错误响应报文、裸错误码），给出类别、含义、处置建议与可重试性。字典对齐网关公共契约（62 码，分类/对外语义冻结）。</p>
@@ -862,6 +863,11 @@
     <section class="card">
       <h2>断言结果</h2>
       <ul class="steps" id="selftest-steps"></ul>
+    </section>
+    <section class="card">
+      <h2>跨语言 canonical 对拍向量</h2>
+      <p class="inline-note">javaUrlEncode / trimall / canonicalHeaders / buildCanonical 的字节级期望值（17 正向量 + 6 陷阱断言见上方断言结果）。供商户服务端跨语言实现（Java / Go / Python…）移植对拍：任一语言实现对下表输入逐条产出期望输出，即与本工具签名语义对齐。语义锚 = entry-wise 实现：逐项规范化键并携带各自值，再按码元升序排序。</p>
+      <div id="selftest-canon-table"></div>
     </section>
   </div><!-- /tab-selftest -->
   <div class="tabpage" id="tab-api" hidden>
@@ -1381,8 +1387,10 @@ function javaUrlEncode(s) {
 }
 function trimall(s) { return String(s == null ? '' : s).trim().replace(/\s+/g, ' '); }
 function canonicalHeaders(map) {
-  const keys = Object.keys(map).map(k => trimall(k).toLowerCase()).sort();
-  return keys.map(k => javaUrlEncode(k) + ':' + javaUrlEncode(trimall(map[k]))).join('\n');
+  // 逐项规范化键并携带各自值再排序（若用规范化后的键回查 map，混合大小写/带空格的键会取不到原值而产出空头）
+  const entries = Object.keys(map).map(k => [trimall(k).toLowerCase(), map[k]]);
+  entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return entries.map(([k, v]) => javaUrlEncode(k) + ':' + javaUrlEncode(trimall(v))).join('\n');
 }
 function buildCanonical(auth, method, path, qs, ch) {
   // 与 CanonicalRequestBuilder.build 一致：5 段 '\n' 连接，POST 的 queryString 为空串
@@ -2176,6 +2184,64 @@ const WOP_VECTORS = {
  ]
 };
 
+// 跨语言 canonical 对拍向量（由页面 javaUrlEncode/trimall/canonicalHeaders/buildCanonical 派生）
+// 语义锚 = entry-wise 修复后实现（2026-08-31）：逐项规范化键并携带各自值再排序；供商户跨语言移植对拍
+const WOP_CANON_VECTORS = {
+  meta: { version: 'v1.0', derived: 'javaUrlEncode/trimall/canonicalHeaders/buildCanonical', note: '期望值为修复后实现字节级输出' },
+  enc: [
+    { id: 'enc-1', in: 'demo_app_key', out: 'demo_app_key', note: '字母数字免编码' },
+    { id: 'enc-2', in: 'hello world', out: 'hello%20world', note: '空格→%20（非 +）' },
+    { id: 'enc-3', in: 'a.b-c_d*e', out: 'a.b-c_d*e', note: '._-* 免编码' },
+    { id: 'enc-4', in: "it's (a) ~bang~!", out: 'it%27s%20%28a%29%20%7Ebang%7E%21', note: "!'()~ 全编码且 %XX 大写" },
+    { id: 'enc-5', in: 'x=y&z?w#p/q', out: 'x%3Dy%26z%3Fw%23p%2Fq', note: '保留字符全编码' },
+    { id: 'enc-6', in: '中文 消息', out: '%E4%B8%AD%E6%96%87%20%E6%B6%88%E6%81%AF', note: '多字节 UTF-8 逐字节编码' },
+    { id: 'enc-7', in: '100%', out: '100%25', note: '% 本体→%25' }
+  ],
+  trim: [
+    { id: 'trim-1', in: '  demo  ', out: 'demo', note: '首尾空白剥离' },
+    { id: 'trim-2', in: 'a\tb\nc\r\nd  e', out: 'a b c d e', note: '内部连续空白折叠为单个空格' },
+    { id: 'trim-3', in: null, out: '', note: 'null 归空串' }
+  ],
+  ch: [
+    { id: 'ch-1', in: { 'X-Wop-AppKey ': 'demo_app_key', nonce: 'n1' }, out: 'nonce:n1\nx-wop-appkey:demo_app_key', note: '混合大小写/尾空格键规范化后各自携带原值（规范化键回查 map 丢值陷阱）' },
+    { id: 'ch-2', in: { z: '1', a: '2', m: '3' }, out: 'a:2\nm:3\nz:1', note: '规范化后按 UTF-16 码元升序' },
+    { id: 'ch-3', in: { k: '  spaced   out  ' }, out: 'k:spaced%20out', note: '值先 trim 折叠再编码（单 %20）' },
+    { id: 'ch-4', in: { special: "!'()~" }, out: 'special:%21%27%28%29%7E', note: "值内 !'()~ 全编码大写" },
+    { id: 'ch-5', in: {}, out: '', note: '空 map→空串' },
+    { id: 'ch-6', in: { '头部': '值 一' }, out: '%E5%A4%B4%E9%83%A8:%E5%80%BC%20%E4%B8%80', note: '键值均过编码器（中文键不豁免）' }
+  ],
+  canon: [
+    { id: 'canon-1', in: ['WOP-HMAC-SHA256 demo_app_key', 'post', '/v1/pay', '', { 'X-Wop-AppKey': 'demo_app_key', 'X-Wop-Nonce': 'n1' }], out: 'WOP-HMAC-SHA256 demo_app_key\nPOST\n/v1/pay\n\nx-wop-appkey:demo_app_key\nx-wop-nonce:n1', note: '五段全串：POST 空 qs 时第 4 行空行保留' }
+  ]
+};
+
+// 渲染跨语言对拍向量表（textContent 填充，产物仅静态文本，S1/S2 安全）
+function renderCanonVectors() {
+  const host = $('selftest-canon-table');
+  if (!host) return;
+  const mkCell = (tag, text) => { const el = document.createElement(tag); el.textContent = text; return el; };
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  ['ID', '输入', '期望输出', '说明'].forEach(t => hr.appendChild(mkCell('th', t)));
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  for (const section of ['enc', 'trim', 'ch', 'canon']) {
+    for (const v of WOP_CANON_VECTORS[section]) {
+      const tr = document.createElement('tr');
+      tr.appendChild(mkCell('td', v.id));
+      tr.appendChild(mkCell('td', v.in === null ? 'null' : (typeof v.in === 'object' ? JSON.stringify(v.in) : String(v.in))));
+      tr.appendChild(mkCell('td', v.out));
+      tr.appendChild(mkCell('td', v.note || ''));
+      tbody.appendChild(tr);
+    }
+  }
+  table.appendChild(tbody);
+  host.appendChild(table);
+}
+renderCanonVectors();
+
 async function runSelftest() {
   const steps = [];
   // 先清空上次渲染结果：自测文案渲染进 DOM 会污染后续源码自扫描（S1/S2）
@@ -2420,6 +2486,43 @@ async function runSelftest() {
         steps.push({ ok: false, text: id + ' 断言执行抛错：' + (e && e.message ? e.message : e) });
       }
     }
+  }
+
+  // spec:WF6.canon-vectors —— 跨语言 canonical 对拍向量：enc/trim/ch/canon 正向量逐条字节级比对
+  {
+    const CV = WOP_CANON_VECTORS;
+    const fns = { enc: javaUrlEncode, trim: trimall, ch: canonicalHeaders };
+    for (const section of ['enc', 'trim', 'ch']) {
+      for (const v of CV[section]) {
+        const got = fns[section](v.in);
+        if (got === v.out) ok(v.id, '字节级一致');
+        else fail(v.id, JSON.stringify(got), JSON.stringify(v.out));
+      }
+    }
+    for (const v of CV.canon) {
+      const got = buildCanonical(v.in[0], v.in[1], v.in[2], v.in[3], canonicalHeaders(v.in[4]));
+      if (got === v.out) ok(v.id, '五段全串字节级一致');
+      else fail(v.id, JSON.stringify(got), JSON.stringify(v.out));
+    }
+    // 负向量/陷阱（否定式条款同样必须有测试）
+    // spec:WF6.canon-trap-key-loss —— 规范化键回查 map 丢值回归：ch-1 输出不得出现空值头
+    if (!/(^|\n)x-wop-appkey:(\n|$)/.test(canonicalHeaders(CV.ch[0].in))) ok('ch-trap-key-loss', '混合大小写/尾空格键值未丢失');
+    else fail('ch-trap-key-loss', '出现空值头（规范化键回查 map 回归）', '无空值头');
+    // spec:WF6.canon-trap-sort-case —— 小写化必须先于排序：小写键不得排在大写原键之后
+    if (canonicalHeaders({ 'X-A': '1', a: '2' }) === 'a:2\nx-a:1') ok('ch-trap-sort-case', '排序前已完成小写化');
+    else fail('ch-trap-sort-case', canonicalHeaders({ 'X-A': '1', a: '2' }), 'a:2\nx-a:1');
+    // spec:WF6.canon-trap-trim-first —— trim 折叠必须先于编码：值内多空白不得产出 %20%20
+    if (canonicalHeaders(CV.ch[2].in).indexOf('%20%20') === -1) ok('ch-trap-trim-first', '折叠后单 %20');
+    else fail('ch-trap-trim-first', canonicalHeaders(CV.ch[2].in), 'k:spaced%20out');
+    // spec:WF6.canon-trap-empty —— 空 map 产空串；空 qs 时五段恰 5 行且第 4 行为空行
+    if (canonicalHeaders({}) === '') ok('ch-trap-empty-map', '空 map→空串');
+    else fail('ch-trap-empty-map', '非空串', '');
+    if ((function () { const l = buildCanonical('a', 'post', '/p', '', canonicalHeaders({ b: '1' })).split('\n'); return l.length === 5 && l[3] === ''; })()) ok('canon-trap-empty-qs', '恰 5 行且第 4 行为空行');
+    else fail('canon-trap-empty-qs', '行数/空行位置错误', '5 行/第 4 行空');
+    // spec:WF6.canon-trap-upper-hex —— !'()~ 必须全编码且 %XX 十六进制大写（不得出现小写 %xx）
+    var escs = javaUrlEncode(CV.enc[3].in).match(/%../g) || [];
+    if (escs.every(e => e === e.toUpperCase())) ok('enc-trap-upper-hex', '转义全大写 %XX');
+    else fail('enc-trap-upper-hex', javaUrlEncode(CV.enc[3].in), CV.enc[3].out);
   }
 
   return steps;
@@ -2905,9 +3008,11 @@ x-wop-content-digest: `+a,p=l(d,u.privateHex),m={"x-wop-sign":"WOP-SM2-SM3 v1/18
     });
   }
   function localCanonicalHeaders(map) {
-    var keys = Object.keys(map).map(function (k) { return String(k).trim().replace(/\s+/g, ' ').toLowerCase(); }).sort();
-    return keys.map(function (k) {
-      return localJavaUrlEncode(k) + ':' + localJavaUrlEncode(String(map[k] == null ? '' : map[k]).trim().replace(/\s+/g, ' '));
+    // 语义镜像全局 canonicalHeaders：逐项规范化键并携带各自值再排序（规范化键回查 map 会丢值）
+    var entries = Object.keys(map).map(function (k) { return [String(k).trim().replace(/\s+/g, ' ').toLowerCase(), map[k]]; });
+    entries.sort(function (a, b) { return (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return entries.map(function (e) {
+      return localJavaUrlEncode(e[0]) + ':' + localJavaUrlEncode(String(e[1] == null ? '' : e[1]).trim().replace(/\s+/g, ' '));
     }).join('\n');
   }
   function localBuildCanonical(auth, method, path, qs, ch) {
@@ -3024,6 +3129,13 @@ x-wop-content-digest: `+a,p=l(d,u.privateHex),m={"x-wop-sign":"WOP-SM2-SM3 v1/18
         em.className = 'wf10-empty-mark';
         em.textContent = t('wf10.emptyline', '(空行：POST 查询串为空)');
         tx.appendChild(em);
+      } else if (state.mode === 'preview' && seg.type === 'header' && seg.name === 'x-wop-content-digest') {
+        // spec:WF10 —— 预览模式摘要为估算值：渲染层加显著前缀（autoText 真值不动，diff 比对不受影响）
+        var warn = document.createElement('b');
+        warn.style.color = '#dc2626';
+        warn.textContent = t('wf10.digest.preview', '⚠ 非最终值（预览按明文 body 估算）');
+        tx.appendChild(warn);
+        tx.appendChild(document.createTextNode(' ' + seg.text));
       } else {
         tx.textContent = seg.text;
       }
@@ -5125,8 +5237,11 @@ x-wop-content-digest: `+a,p=l(d,u.privateHex),m={"x-wop-sign":"WOP-SM2-SM3 v1/18
   }
   function trimall(s) { return String(s == null ? '' : s).trim().replace(/\s+/g, ' '); }
   function chLocal(map) {
-    return Object.keys(map).sort().map(function (k) {
-      return k + ':' + javaUrlEncode(trimall(map[k]));
+    // 语义镜像全局 canonicalHeaders：逐项规范化键并携带各自值再排序；键同样过 javaUrlEncode
+    var entries = Object.keys(map).map(function (k) { return [trimall(k).toLowerCase(), map[k]]; });
+    entries.sort(function (a, b) { return (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return entries.map(function (e) {
+      return javaUrlEncode(e[0]) + ':' + javaUrlEncode(trimall(e[1]));
     }).join('\n');
   }
   function canonLocal(auth, method, path, qs, ch) {
