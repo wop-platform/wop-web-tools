@@ -140,7 +140,7 @@
 | WF11 API 目录 | `// spec:WF11`（runSelftest：契约渲染断言） | 示例契约渲染+表单模板生成（OpenAPI 3.1 就绪） | 功能 |
 | WF12 教学图解 | `// spec:WF12.sign-demo/tamper-*`（runSelftest） | L0/L2 数字信封真实密码学演示 + 四错误路径拦截 | 功能+否定式 |
 | WF14 i18n | `// spec:WF14-*`（runSelftest）+ `WF14.collectKeys()` 差集 | 中英切换/级联/非法回退/事件；全 data-i18n key 有译 | 功能+否定式 |
-| WF13 国密 SM2-SM3 | `// spec:GM-P1..P10`（runSelftest 金向量）+ `// spec:GM-K1/K2/K3`（runSelftest 分派） | 黄金向量字节级（userId=1234567812345678）+ SPKI/PKCS#8 解析、RSA 混用拒收、内核缺失防护、坏签名 allOk=false | 功能+否定式 |
+| WF13 国密 SM2-SM3 | `// spec:GM-P1..P11`（runSelftest 金向量 + 跨 appkey 验签必败）+ `// spec:GM-K1/K2/K3/K3-appkey-empty`（runSelftest 分派 + 空 appkey 拒收） | 黄金向量字节级（夹具固定 userId=1234567812345678，非真实 appkey）+ 产品路径 userId=x-wop-appkey 头值（契约，2026-08-31 飞书裁决）+ SPKI/PKCS#8 解析、RSA 混用拒收、空 appkey 拒收（分派 GM-K3-appkey-empty；onBuild GM-P11-build-empty；onVerify GM-P11-ver-misshead）、内核缺失防护、坏签名 allOk=false | 功能+否定式 |
 | S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
 | S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
 | G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
@@ -152,7 +152,7 @@
 | # | 问题 | 结论 | 状态 |
 |---|---|---|---|
 | D1 | 回调语义 | 对齐 v1.0-ratified F3/F6，迁移即纠正页面推演标注与步骤顺序 | **已定**（advisory 核实） |
-| D2 | SM2 支持时机 | 已实现（WF13）：内置 sm-crypto-v2（审计+版本锁定），gm 面板 + verifyResponse 分派；userId 契约空白见 wop-specs 上报 | **已落地**（2026-08-31） |
+| D2 | SM2 支持时机 | 已实现（WF13）：内置 sm-crypto-v2（审计+版本锁定），gm 面板 + verifyResponse 分派；userId 契约已钉（2026-08-31 飞书裁决）：**userId = x-wop-appkey 头值**；golden 向量固定 1234567812345678 仅作夹具（非真实 appkey，待向量再生成迁移） | **已落地**（2026-08-31） |
 | D3 | 仓库归属 | 默认 wop-platform 组织 / `wop-web-tools` | 待拍板 |
 | D4 | 语言 | README 中文默认 + 英文（循惯例） | **已定** |
 | D5 | 产物形态 | 源码多文件 + 构建产物单文件（保留离线卖点） | 默认采纳 |
@@ -180,4 +180,4 @@
 
  优先级：P0 = 现有两场景上线 + WF5 顺序纠正 + WF6 向量自测 + WF7 粘贴解析 + WF8 错误诊断（2026-08-31 落地）
 → P1 = WF9–WF10（代码片段、canonical 可视化）→ P2 = WF11–WF14（目录、教学、SM2、i18n）。
-**全部已落地**：2026-08-31 增强批次二——WF9/10/11/12/14 + WF13 国密 SM2-SM3（sm-crypto-v2 内置）随集成 commit 交付；自测 126 项全绿，变更区覆盖 100%。
+**全部已落地**：2026-08-31 增强批次二——WF9/10/11/12/14 + WF13 国密 SM2-SM3（sm-crypto-v2 内置）随集成 commit 交付；自测 153 项全绿，变更区覆盖 100%。

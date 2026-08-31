@@ -48,6 +48,7 @@ const DEK_PAYLOAD_RE = /^SM4-GCM\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{16}$/;
 export const GOLDEN_SM = {
   message: 'WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.',
   sm2UserId: SM2_USER_ID,
+  appKey: '1234567812345678',
   pubB64: 'BKYcUacrp3w6tPeXpkEb2yktpbGgfCOsob/F5yo9wq9+LvzIx2Isu+CGnf6Z89tTJpZxm5GX7VUDr8KdsxHzYKg=',
   privB64: 'RyJ/wB0tfgGGSgug0lKZoOwJlj2001kD5wbYmnmPFr0=',
   sigB64u: 'Si7Uw5eZm0Kii3BuIRLXwMGGOxkwFria8ypcVYXnReV376EVgV0TOkQfm21NUnJZNGM-fV0d0fMF23B0Bm3TFw',
