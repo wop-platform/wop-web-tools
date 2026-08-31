@@ -1,0 +1,7 @@
+<!-- WF14 语言切换控件（内容与 wf14.html 一致）
+     锚点建议：插入页面右上角 —— 现有 index.html 的 <header>（约 146 行）内 <h1> 同行右侧。
+     接线说明：片段插入 DOM 后由集成者统一调用 WF_REGISTRY.wf14.init()；本片段不自带事件绑定。 -->
+<div id="wf14-lang-switch" role="group" aria-label="语言 / Language">
+  <button type="button" id="wf14-btn-zh" class="wf14-lang-btn wf14-active" data-wf14-lang="zh" aria-pressed="true"><span class="i18n" data-i18n="wf14.lang.zh">中文</span></button>
+  <button type="button" id="wf14-btn-en" class="wf14-lang-btn" data-wf14-lang="en" aria-pressed="false"><span class="i18n" data-i18n="wf14.lang.en">English</span></button>
+</div>
