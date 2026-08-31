@@ -495,13 +495,13 @@ export function smGoldenSelfTest() {
 
   // spec:GM-07b 首字节 0x30 的合法裸签名必须被接受（旧规则误拒约 1/256 合法签名；循环至命中）
   t('GM-07b', '0x30 头裸签名被接受', function () {
-    for (let i = 0; i < 1024; i++) {
+    for (let i = 0; i < 4096; i++) {
       const sig = sm2SignBytes(msgBytes, privHex);
       if (bytesFromB64u(sig)[0] === 0x30) {
         return sm2VerifyB64u(msgBytes, sig, pubHex) === true || '0x30 头合法签名被误拒';
       }
     }
-    return '1024 次未命中 0x30 头（1/256 概率，异常）';
+    return '4096 次未命中 0x30 头（1/256 概率，异常）';
   });
 
   // spec:GM-08 自签名裸 r‖s（128 hex / b64u 86 字符）且自验通过
