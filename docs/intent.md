@@ -67,7 +67,7 @@ wop-platform 组织（GitHub 公开）已存在完整生态：
 | D2 | SM2 支持时机 | 待拍板：遵循 Q7 裁决精神默认「首版仅 RSA、国密列路线图」（WebCrypto 无 SM2/SM3/SM4，浏览器侧需三方库，属 scope 决策） |
 | D3 | 仓库归属 | 待拍板：默认 wop-platform 组织，仓库名 `wop-web-tools` |
 | D4 | 语言 | **已定**（循 wop-platform 惯例）：README 中文默认 + README.en.md |
-| D5 | 产物形态 | 默认：源码多文件 + 构建产物单文件（保留离线卖点） |
+| D5 | 产物形态 | 默认：源码多文件 + 构建产物单文件（保留离线卖点）→ **2026-08-31 修订**：多文件直部署（壳 `index.html` + `assets/*`），离线交付改整目录；活条款见 `docs/spec.md` D5 |
 | D6 | 数据来源 | 默认：零网络，数据字典内置打包随版本 |
 | D7 | 私钥交付 | 默认：复制/下载即唯一副本提示；引导离线备份；禁止诱导上传 |
 | D8 | 仓惯例 | **已定**（循 wop-platform 惯例）：MIT License、README 中英（四段必备）、`vectors/crypto-vectors.json` fixture 禁手改、字节级向量自测（F8 语义，正/负向量） |

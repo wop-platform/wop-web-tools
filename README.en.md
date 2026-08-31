@@ -3,8 +3,8 @@
 
 Browser-side WOP merchant workbench: key generation · message interop · offline verification.
 
-- Pure static single file; keys are generated locally in the browser — zero upload, zero network
-- Browse online via GitHub Pages, or download `index.html` and use it offline
+- Pure static multi-file layout (shell `index.html` + `assets/*`, one file per feature); keys are generated locally in the browser — zero upload, zero network
+- Browse online via GitHub Pages; offline use = keep the whole directory (`index.html` + `assets/`) and open it via file://
 - Aligned with the ratified specs in [wop-specs](https://github.com/wop-platform/wop-specs)
 
 ## Features
@@ -26,6 +26,7 @@ rejected) aligned with the golden vectors in wop-specs. Run it before trusting o
 
 - `docs/intent.md` — intent and boundaries
 - `docs/spec.md` — spec (clause-based, with decision records)
+- `assets/` — page source of truth (the shell loads 13 deferred scripts in order: core → feature slices → selftest → boot)
 
 ## Ecosystem
 

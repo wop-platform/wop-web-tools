@@ -18,19 +18,19 @@ jobs:
       # gm/node_modules 下的依赖以相对路径符号链接指向 gm/vendor/，
       # checkout 后即可解析，无需 npm install。
 
-      - name: Syntax gates
+      - name: Syntax gates (all assets)
         run: |
-          node --check wf14/wf14.js
-          node --check wf14/wf14.selftest.js
+          for f in assets/*.js; do node --check "$f"; done
 
       - name: wf14 selftest (expect 15/15)
         run: |
-          cat wf14/wf14.js wf14/wf14.selftest.js > /tmp/wf14_concat.js
-          echo 'var R = WF14_RUN_SELFTEST(); var p = R.filter(function(x){return x.pass;}).length; console.log("SELFTEST " + p + "/" + R.length); R.forEach(function(x,i){ if(!x.pass) console.log("FAIL " + (i+1) + ": " + x.name + " | " + x.detail); }); process.exit(p === R.length ? 0 : 1);' >> /tmp/wf14_concat.js
-          node /tmp/wf14_concat.js
+          (cat assets/wf14.js assets/wf14.selftest.js; echo 'var R = WF14_RUN_SELFTEST(); var p = R.filter(function(x){return x.pass;}).length; console.log("SELFTEST " + p + "/" + R.length); R.forEach(function(x,i){ if(!x.pass) console.log("FAIL " + (i+1) + ": " + x.name + " | " + x.detail); }); process.exit(p === R.length ? 0 : 1);') | node
 
       - name: DOM structure checks (dom_check matrix)
         run: node dom_check.mjs
+
+      - name: Banned token scan (S1/S2 repo gate)
+        run: node scan_banned.mjs
 
       - name: gm golden vectors
         run: node gm/test.mjs

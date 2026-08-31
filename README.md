@@ -3,8 +3,8 @@
 
 浏览器端 WOP 商户工作台：密钥生成 · 报文构造/验证 · 国密 SM2-SM3 · 联调辅助。
 
-- 纯静态单文件，密钥在浏览器本地生成，零上传零网络请求
-- GitHub Pages 在线浏览，也可下载 `index.html` 离线使用
+- 纯静态多文件（壳 `index.html` + `assets/*`，单功能单文件），密钥在浏览器本地生成，零上传零网络请求
+- GitHub Pages 在线浏览；本地离线使用 = 保留整目录（`index.html` 与 `assets/`）file:// 打开
 - 协议与 [wop-specs](https://github.com/wop-platform/wop-specs) 对齐（crypto-strategy-spec v0.3-reviewed · wop-sdk-spec v1.0-ratified）
 - 中英双语 UI（右上角语言切换，刷新回中文，不落盘）
 
@@ -29,14 +29,16 @@
 
 页面底部「运行自测」：153 项断言 = WF1–WF14 各切片 + 宪法级 S1/S2 源码自扫描 + 国密金向量（GM-P1..P11）+ 国密分派负路径（GM-K1/K2/K3/K3-appkey-empty）。全部通过显示「全部通过」。
 
-- 自扫描守护：源码不得含 `fetch(` / `XMLHttpRequest` / `WebSocket` / `navigator.sendBeacon` / `localStorage` / `sessionStorage` / `indexedDB` / 非 `data:` 的 `src=`/`href=`（S1/S2 宪法级）
+- 自扫描守护（两层）：页内壳自扫描断言 DOM 无跨源 `src=`/`href=`（S1）；源码级禁词
+  （`fetch(` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / `localStorage` / `sessionStorage` /
+  `indexedDB` / `document.cookie` / 跨源引用）由仓库门禁 `scan_banned.mjs`（pre-commit + CI）执法
 - 断言均带 `// spec:<ID>` 标签，条款 → 断言反向核对矩阵见 `docs/spec.md` §5.1
 
 ## 开发
 
 - `docs/intent.md` — 意图与边界
 - `docs/spec.md` — 规格（条款化，含决策记录与反向核对矩阵）
-- `parallel/` — 各 WF 切片任务书（herdr 并行批次）
+- `assets/` — 页面源码真源（壳按 13 个 `defer` 脚本按序加载：core → 各功能切片 → selftest → boot）
 - 国密内核：`gm/gmcore.mjs`（sm-crypto-v2 审计内置，黄金向量字节级对齐）
 
 ## 生态

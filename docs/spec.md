@@ -1,9 +1,11 @@
 # WOP Web Tools — Spec
 
-> 状态：草案（grill 修订 v3） · 版本：v0.3-draft · 日期：2026-08-31
+> 状态：草案（grill 修订 v3） · 版本：v0.4-draft · 日期：2026-08-31
 > 对齐：crypto-strategy-spec v0.3-reviewed · **wop-sdk-spec v1.0-ratified（F3/F6/F8）** · wop-skills SECURITY.md S1–S8
 > 条款编号用 `WF`（Web Function）前缀，避免与 wop-sdk-spec 的 F1–F9 混淆。
 > v0.3 变更：WF7 粘贴解析、WF8 错误诊断由 P1 提前至 P0 并已落地（2026-08-31 增强批次）。
+> v0.4 变更：产物形态修订为多文件直部署（壳 index.html + assets/*，单功能单文件），D5/A2/G2/S1 同步修订；
+> S1/S2 源码级禁词执法分层至仓库门禁 scan_banned.mjs（pre-commit + CI）（2026-08-31 性能拆分批次）。
 
 ## 0. 参考真源
 
@@ -86,7 +88,10 @@
 ## 3. 安全条款（S1–S7，宪法级）
 
 - **S1 零外发**：密钥材料与明文报文**永不离开浏览器**。页面不得发起任何网络请求、
-  不得加载第三方脚本（含 CDN/统计/字体）。构建产物须可审计（无外部资源引用）。
+  不得加载第三方脚本（含 CDN/统计/字体）。产物形态为多文件（D5，2026-08-31 修订）：
+  放行同源静态资源（assets/ 相对路径），禁止一切跨源 URL（http(s)://、协议相对 //）；
+  源码级网络/存储禁词执法由仓库门禁 scan_banned.mjs（SCAN-1..3，pre-commit + CI）承担，
+  页内壳自扫描（scanSelfForBanned）保留壳级否定式断言。
 - **S2 不落盘**：私钥仅存内存/剪贴板/用户主动下载的文件；页面刷新即失；
   不得写入 localStorage/sessionStorage/IndexedDB。
 - **S3 依赖白名单**：引入密码库须审计 + 版本锁定 + 内置打包（禁止运行时网络加载）；
@@ -101,7 +106,8 @@
 ## 4. 治理与发布条款（G1–G5）
 
 - **G1 归属**：wop-platform 组织（D3 待拍板），仓库与 specs/skills 同层治理。
-- **G2 Pages**：GitHub Pages 启用（HTTPS）；根路径部署 `index.html`；同时保留仓库内单文件可下载路径。
+- **G2 Pages**：GitHub Pages 启用（HTTPS）；根路径部署壳 `index.html` + `assets/*`（多文件形态）。
+  （2026-08-31：仓库内单文件可下载路径随 D5 修订退役；本地离线 = 保留整目录 file:// 打开。）
 - **G3 对齐**：协议术语/头名/错误码以 wop-specs 为唯一权威；真源变更须同步修订页面并 bump 版本。
 - **G4 版本**：向量变更 = 破坏性变更；发布物声明对齐三元组版本（crypto spec / sdk spec / vectors）。
 - **G5 测试载体**：功能条款 → 浏览器端 self-test 页（向量断言）；`spec:<ID>` 标签可 grep 索引；
@@ -113,7 +119,8 @@
 ## 5. 验收标准（A1–A7）
 
 - **A1** Pages 线上可访问（HTTPS），密钥生成全流程可用。
-- **A2** 下载单文件 `index.html` 本地打开（file://），全功能可用（离线卖点成立）。
+- **A2** 本地打开（file://，壳 `index.html` 与同目录 `assets/`）全功能可用（离线卖点成立；
+  2026-08-31 D5 修订：离线交付形态由「单文件下载」改为「整目录」）。
 - **A3** WF6 向量自测通过（正向量字节级一致 + 负向量全部拒绝）；页面声明的对齐版本与 wop-specs 一致。
 - **A4** WF5 校验顺序与 F6 一致（验签→digest 复核→DEK 解包→alg 族比对→bulk 解密）；
   页面无「回调推演/未冻结」过时标注。
@@ -141,11 +148,12 @@
 | WF12 教学图解 | `// spec:WF12.sign-demo/tamper-*`（runSelftest） | L0/L2 数字信封真实密码学演示 + 四错误路径拦截 | 功能+否定式 |
 | WF14 i18n | `// spec:WF14-*`（runSelftest）+ `WF14.collectKeys()` 差集 | 中英切换/级联/非法回退/事件；全 data-i18n key 有译 | 功能+否定式 |
 | WF13 国密 SM2-SM3 | `// spec:GM-P1..P11`（runSelftest 金向量 + 跨 appkey 验签必败）+ `// spec:GM-K1/K2/K3/K3-appkey-empty`（runSelftest 分派 + 空 appkey 拒收） | 黄金向量字节级（夹具固定 userId=1234567812345678，非真实 appkey）+ 产品路径 userId=x-wop-appkey 头值（契约，2026-08-31 飞书裁决）+ SPKI/PKCS#8 解析、RSA 混用拒收、空 appkey 拒收（分派 GM-K3-appkey-empty；onBuild GM-P11-build-empty；onVerify GM-P11-ver-misshead）、内核缺失防护、坏签名 allOk=false | 功能+否定式 |
-| S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
-| S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
+| S1 零外发 | `// spec:S1`（scanSelfForBanned 壳自扫描）+ SCAN-1/SCAN-2（scan_banned.mjs） | 壳无跨源 src/href；源码级（index.html+assets/*.js）无 fetch/XHR/WS/Beacon、无跨源引用 | 否定式（两层） |
+| S2 不落盘 | `// spec:S2`（scanSelfForBanned 壳自扫描）+ SCAN-3（scan_banned.mjs） | 源码级无 localStorage/sessionStorage/indexedDB/document.cookie | 否定式（两层） |
 | G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
 
-> 注：扫描范围剔除自扫描函数自身源码（toString），描述性文案不误伤；禁词拼接书写双保险。
+> 注：壳自扫描范围剔除自扫描函数自身源码（toString），描述性文案不误伤；禁词拼接书写双保险。
+> 源码级扫描（scan_banned.mjs）覆盖 index.html + assets/*.js，禁词同样拼接防自命中。
 
 ## 6. 决策记录（D1–D8）
 
@@ -155,7 +163,8 @@
 | D2 | SM2 支持时机 | 已实现（WF13）：内置 sm-crypto-v2（审计+版本锁定），gm 面板 + verifyResponse 分派；userId 契约已钉（2026-08-31 飞书裁决）：**userId = x-wop-appkey 头值**；golden 向量固定 1234567812345678 仅作夹具（非真实 appkey，待向量再生成迁移） | **已落地**（2026-08-31） |
 | D3 | 仓库归属 | 默认 wop-platform 组织 / `wop-web-tools` | 待拍板 |
 | D4 | 语言 | README 中文默认 + 英文（循惯例） | **已定** |
-| D5 | 产物形态 | 源码多文件 + 构建产物单文件（保留离线卖点） | 默认采纳 |
+| D5 | 产物形态 | 多文件直部署：壳 index.html + assets/*（单功能单文件，缓存粒度/并行加载/维护成本）；
+  弃「构建产物单文件」（离线交付改整目录 file://） | **已修订**（2026-08-31 性能拆分裁定） |
 | D6 | 数据来源 | 零网络，数据字典内置打包随版本 | 默认采纳 |
 | D7 | 私钥交付 | 复制/下载即唯一副本 + 引导备份；禁止诱导上传 | 默认采纳 |
 | D8 | 仓惯例 | MIT / 双语 README / vectors fixture 禁手改 / 向量自测（F8 语义） | **已定** |

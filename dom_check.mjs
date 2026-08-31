@@ -17,8 +17,9 @@
 //   spec:DOM-2  #diag-err 不在 #resp-out 内（WF8 诊断卡独立于验证结果容器，核心条款）
 //   spec:DOM-3  #diag-err 在 #req-out 内（构造请求即 .show 可见，先于验证）
 //   spec:DOM-4  六个 tab-* 页面全部存在且互不嵌套（白页根因的泛化）
-//   spec:DOM-5  #req-out/#resp-out 默认 display:none 与 .show 解锁规则存在（树形→可见性铰链）
+//   spec:DOM-5  外链 CSS 中 #req-out/#resp-out 默认 display:none 与 .show 解锁规则存在（树形→可见性铰链）
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const file = process.argv[2] || 'index.html';
 const src = readFileSync(file, 'utf8');
@@ -70,10 +71,13 @@ for (const t of TABS) {
 }
 check('DOM-4', !nestErr, '六 tab 页存在且互不嵌套' + (nestErr || ''));
 
+// DOM-5：CSS 外链（拆分形态）后规则不在壳 src 内 —— 解析 <link href> 读 CSS 文件检查
+const cssSrc = [...src.matchAll(/<link\b[^>]*href="([^"]+\.css)"/gi)]
+  .map(m => readFileSync(join(dirname(file), m[1]), 'utf8')).join('\n');
 check('DOM-5',
-  /#req-out,\s*#resp-out\s*\{[^}]*display:\s*none/.test(src) &&
-  /#req-out\.show,\s*#resp-out\.show\s*\{[^}]*display:\s*block/.test(src),
-  'req-out/resp-out 默认隐藏与 .show 解锁规则存在');
+  /#req-out,\s*#resp-out\s*\{[^}]*display:\s*none/.test(cssSrc) &&
+  /#req-out\.show,\s*#resp-out\.show\s*\{[^}]*display:\s*block/.test(cssSrc),
+  '外链 CSS 中 req-out/resp-out 默认隐藏与 .show 解锁规则存在');
 
 console.log(fails.length ? 'FAILED: ' + fails.join(',') : 'ALL PASS (DOM-1..DOM-5)');
 process.exit(fails.length ? 1 : 0);
