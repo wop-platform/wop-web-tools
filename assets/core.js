@@ -349,8 +349,13 @@ function renderSteps(el, steps) {
   for (const s of steps) {
     const li = document.createElement('li');
     li.className = s.ok === true ? 'ok' : s.ok === false ? 'bad' : 'skip';
-    const mark = s.ok === true ? '✓' : s.ok === false ? '✗' : '·';
-    li.innerHTML = '<span class="st">' + mark + '</span><span class="detail">' + (s.ok === false && s.err ? s.err : s.text) + '</span>';
+    const st = document.createElement('span');
+    st.className = 'st';
+    st.textContent = s.ok === true ? '✓' : s.ok === false ? '✗' : '·';
+    const detail = document.createElement('span');
+    detail.className = 'detail';
+    detail.textContent = s.ok === false && s.err ? s.err : s.text;
+    li.append(st, detail);
     el.appendChild(li);
   }
 }
