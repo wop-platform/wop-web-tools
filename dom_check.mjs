@@ -36,7 +36,7 @@ const check = (id, cond, msg) => {
 const stack = [];
 let underflow = false;
 const ancestors = Object.create(null); // 元素 id -> 打开时外围 div id 列表
-const re = /<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>|<style\b[\s\S]*?<\/style\s*>|<div\b[^>]*>|<\/div\s*>|id="([^"]+)"/gi;
+const re = /<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\b[^>]*>|<style\b[\s\S]*?<\/style\b[^>]*>|<div\b[^>]*>|<\/div\b[^>]*>|id="([^"]+)"/gi;
 for (const m of src.matchAll(re)) {
   const t = m[0];
   if (t.slice(0, 4) === '<div') {
