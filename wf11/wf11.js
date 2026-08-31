@@ -202,10 +202,10 @@
         var hasAny = Object.keys(sub.values).length > 0;
         if (hasAny) {
           values[f.name] = sub.values;
-          sub.errors.forEach(function (e) { errors.push({ path: e.path, msg: e.msg }); });
-        } else if (f.required) {
+        } else if (f.required && sub.errors.length === 0) {
           errors.push({ path: f.path, msg: t('wf11.err.required', '必填字段缺失') });
         }
+        sub.errors.forEach(function (e) { errors.push({ path: e.path, msg: e.msg }); });
         return;
       }
       var raw = rawValues[f.path];

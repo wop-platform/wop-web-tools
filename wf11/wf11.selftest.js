@@ -118,7 +118,7 @@
     // ---- spec:WF11-VALID-REQ 否定式：必填缺失 ----
     var vReq = C.bodyFromRaw(subModel, { expireDays: '30' });
     var missWaybill = vReq.errors.some(function (e) { return e.path === 'waybillNos'; });
-    var missCb = vReq.errors.some(function (e) { return e.path === 'callback'; });
+    var missCb = vReq.errors.some(function (e) { return e.path === 'callback' || e.path === 'callback.url'; });
     A('校验：必填缺失报错（含嵌套必填）', !vReq.ok && missWaybill && missCb,
       'errors=' + JSON.stringify(vReq.errors));
 
@@ -130,6 +130,17 @@
     var missUrl = vNested.errors.some(function (e) { return e.path === 'callback.url'; });
     A('校验：嵌套必填指向精确路径', !vNested.ok && missUrl,
       'errors=' + JSON.stringify(vNested.errors));
+
+    // 嵌套对象子错误吞噬回归：retryTimes 类型错不得被「对象必填缺失」掩盖（子错误无条件上浮）
+    var vSwallow = C.bodyFromRaw(subModel, {
+      waybillNos: 'SF-888',
+      'callback.retryTimes': 'abc'
+    });
+    var typeErrKept = vSwallow.errors.some(function (e) { return e.path === 'callback.retryTimes'; });
+    var maskedAsMissing = vSwallow.errors.some(function (e) { return e.path === 'callback' && e.msg.indexOf(t_missing()) >= 0; });
+    function t_missing() { return '必填字段缺失'; }
+    A('校验：嵌套子错误不被对象必填掩盖', !vSwallow.ok && typeErrKept && !maskedAsMissing,
+      'errors=' + JSON.stringify(vSwallow.errors));
 
     // ---- spec:WF11-VALID-TYPE 否定式：类型非法 ----
     var intField = null, boolField = null;
