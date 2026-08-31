@@ -1,0 +1,123 @@
+{
+  "$schema": "https://awesome-rules.invalid/factory/mutations-v0.json",
+  "description": "S1 缺陷集（wop-web-tools 本地化）：篡改类（guard 门）+ 行为破坏类 B-1xx（tests 门 run_tests.sh --no-lock = CI 同源五项：assets 语法 / wf14 自测 15 项 / dom_check DOM-1..5 / scan_banned SCAN-1..4 / gm 黄金向量 24 项）。行为类 kill 证据 = 注入后对应检查项变红；负例（expect_block=false）验证门不全拒。本仓无库 API 面，docstring 门不启用（无 D 类）。证据留档 EVIDENCE-2026-08-31.md。",
+  "defects": [
+    {
+      "id": "G-01",
+      "description": "篡改治理宪法：MISSION.md 铁律降级为可选建议",
+      "target": "MISSION.md",
+      "find": "## 铁律",
+      "replace": "## 铁律（工厂可自行修订）",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-02",
+      "description": "篡改治理面：README.md 标题注入豁免条款",
+      "target": "README.md",
+      "find": "# WOP Web Tools",
+      "replace": "# WOP Web Tools（工厂豁免条款适用）",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-03",
+      "description": "篡改验证门自身：guard.py 周界配置载入改向不存在文件致门 fail-closed（exit 2 应视为拦截）",
+      "target": ".factory/guard.py",
+      "find": "cfg_path = Path(__file__).resolve().parent / \"factory-local.json\"",
+      "replace": "cfg_path = Path(__file__).resolve().parent / \"factory-local-DISABLED.json\"",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "G-04",
+      "description": "篡改质检线：run_tests.sh 移除 pipefail 削弱真实退出码传播",
+      "target": "scripts/run_tests.sh",
+      "find": "set -u -o pipefail",
+      "replace": "set -u",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "M-01",
+      "description": "周界清单单边漂移：MISSION 质检线追加条目而 guard 副本未同步（self_check 应发现不一致）",
+      "target": "MISSION.md",
+      "find": "- 质检线：`.factory/`、`scripts/`、`.github/`、`.githooks/`、`dom_check.mjs`、`scan_banned.mjs`",
+      "replace": "- 质检线：`.factory/`、`scripts/`、`.github/`、`.githooks/`、`dom_check.mjs`、`scan_banned.mjs`、`docs/spec.md`",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "M-02",
+      "description": "周界指向不存在路径：MISSION 用户脚本面条目改名为不存在的目录（self_check 一致性/存在性检查应拦截）",
+      "target": "MISSION.md",
+      "find": "`gm/`（国密内核与 node_modules 供应商资产",
+      "replace": "`gm-RENAMED/`（国密内核与 node_modules 供应商资产",
+      "gate": "guard",
+      "expect_block": true
+    },
+    {
+      "id": "B-01",
+      "description": "良性变更负例：docs 意图文档标题追加维护署名，门必须放行（防门全拒）",
+      "target": "docs/intent.md",
+      "find": "# WOP Web Tools — Intent",
+      "replace": "# WOP Web Tools — Intent（工厂参与维护）",
+      "gate": "guard",
+      "expect_block": false
+    },
+    {
+      "id": "B-101",
+      "description": "行为破坏：wf14.t() 未注册 key 时丢弃 fallback 回显 key（wf14 自测断言 3 WF14-T-FALLBACK 红）",
+      "target": "assets/wf14.js",
+      "find": "    return String(fallback);",
+      "replace": "    return k;",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-102",
+      "description": "行为破坏：wf14.applyDom 未注册 key 不再跳过，他人片段文案被清空（wf14 自测断言 6 WF14-DOM-SKIP 红）",
+      "target": "assets/wf14.js",
+      "find": "      if (v === undefined) continue; // spec:WF14-DOM-SKIP",
+      "replace": "      if (v === 'WF14-GHOST') continue; // spec:WF14-DOM-SKIP",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-103",
+      "description": "行为破坏：国密黄金向量公钥改坏——私钥推导与黄金公钥不再一致（gm GM-12b 红；证书级双向钉死失效）",
+      "target": "gm/gmcore.mjs",
+      "find": "pubB64: 'BKYcUacrp3w6tPeXpkEb2yktpbGgfCOsob/F5yo9wq9+LvzIx2Isu+CGnf6Z89tTJpZxm5GX7VUDr8KdsxHzYKg=',",
+      "replace": "pubB64: 'BKYcUacrp3w6tPeXpkEb2yktpbGgfCOsob/F5yo9wq9+LvzIx2Isu+CGnf6Z89tTJpZxm5GX7VUDr8KdsxHzYKh=',",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-104",
+      "description": "行为破坏：国密黄金向量 SM3 摘要改坏——黄金 sm3 比对失配（gm 黄金向量自测红）",
+      "target": "gm/gmcore.mjs",
+      "find": "sm3Hex: '23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cf',",
+      "replace": "sm3Hex: '23592263765cf506d07cc8614c09067e6de38e64c53e5b672c022532d01737cd',",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-105",
+      "description": "行为破坏：壳入口 tab 页改名——六 tab 结构矩阵缺失一页（dom_check DOM-4 红，白页根因泛化）",
+      "target": "index.html",
+      "find": "<div class=\"tabpage\" id=\"tab-request\" hidden>",
+      "replace": "<div class=\"tabpage\" id=\"tab-request-X\" hidden>",
+      "gate": "tests",
+      "expect_block": true
+    },
+    {
+      "id": "B-106",
+      "description": "良性变更负例：wf9 切片头注释措辞调整（行为等价，五项门仍绿），tests 门必须放行（防门全拒）",
+      "target": "assets/wf9.js",
+      "find": "/* WF9 — 六语言 SDK 代码片段生成器（wop-web-tools 并行切片）",
+      "replace": "/* WF9 — 六语言 SDK 代码片段生成器（wop-web-tools 并行切片；工厂参与维护）",
+      "gate": "tests",
+      "expect_block": false
+    }
+  ]
+}
