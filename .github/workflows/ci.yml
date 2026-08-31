@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # gm/node_modules 下的依赖以相对路径符号链接指向 gm/vendor/，
+      # checkout 后即可解析，无需 npm install。
+
+      - name: Syntax gates
+        run: |
+          node --check wf14/wf14.js
+          node --check wf14/wf14.selftest.js
+
+      - name: wf14 selftest (expect 15/15)
+        run: |
+          cat wf14/wf14.js wf14/wf14.selftest.js > /tmp/wf14_concat.js
+          echo 'var R = WF14_RUN_SELFTEST(); var p = R.filter(function(x){return x.pass;}).length; console.log("SELFTEST " + p + "/" + R.length); R.forEach(function(x,i){ if(!x.pass) console.log("FAIL " + (i+1) + ": " + x.name + " | " + x.detail); }); process.exit(p === R.length ? 0 : 1);' >> /tmp/wf14_concat.js
+          node /tmp/wf14_concat.js
+
+      - name: DOM structure checks (dom_check matrix)
+        run: node dom_check.mjs
+
+      - name: gm golden vectors
+        run: node gm/test.mjs
