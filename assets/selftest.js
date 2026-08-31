@@ -325,7 +325,7 @@
     // A7（否定式）GET/空 body：无 body 实参、无 body 变量行、原始 body 串缺席；POST 为全参形态 // spec:WF9-A7
     (function () {
       var fails = [];
-      var DQ_BODY = RSA_CTX.body.replace(/"/g, '\\"'); // Java/Go/Py/PHP/C# 内嵌时双引号被转义
+      var DQ_BODY = RSA_CTX.body.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); // Java/Go/Py/PHP/C# 内嵌时反斜杠与双引号均被转义
       for (var i = 0; i < LANGS.length; i++) {
         var lang = LANGS[i];
         var cases = [GET_CTX, EMPTY_POST_CTX];

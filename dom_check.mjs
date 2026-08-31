@@ -29,24 +29,21 @@ const check = (id, cond, msg) => {
   else { fails.push(id); console.error('FAIL ' + id + '  ' + msg); }
 };
 
-// 剔除注释/脚本/样式后再做 div 栈追踪：
+// 单遍 token 扫描：注释/脚本/样式块作为 skip 分支与 div/id 同场匹配（先到先得）——
+// 链式剔除有重组盲区（<!-- 内嵌 script 片段可重组出新块），且 </script >（带空白）不闭合；
 // 注释里有集成锚点示例 div（tab-api 注释副本），脚本字符串里有动态 div 标记（wf11-err-out）
-const markup = src
-  .replace(/<!--[\s\S]*?-->/g, '')
-  .replace(/<script\b[\s\S]*?<\/script>/gi, '')
-  .replace(/<style\b[\s\S]*?<\/style>/gi, '');
 
 const stack = [];
 let underflow = false;
 const ancestors = Object.create(null); // 元素 id -> 打开时外围 div id 列表
-const re = /<div\b[^>]*>|<\/div>|id="([^"]+)"/g;
-for (const m of markup.matchAll(re)) {
+const re = /<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script\s*>|<style\b[\s\S]*?<\/style\s*>|<div\b[^>]*>|<\/div\s*>|id="([^"]+)"/gi;
+for (const m of src.matchAll(re)) {
   const t = m[0];
   if (t.slice(0, 4) === '<div') {
     const id = (t.match(/\bid="([^"]+)"/) || [])[1] || '';
     if (id) ancestors[id] = stack.slice();
     stack.push(id);
-  } else if (t === '</div>') {
+  } else if (/^<\/div/i.test(t)) {
     if (stack.pop() === undefined) underflow = true;
   } else if (m[1]) {
     ancestors[m[1]] = stack.slice(); // 非 div 元素（如 #diag-err 按钮）记录 div 祖先链
