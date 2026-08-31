@@ -1,5 +1,5 @@
 # WOP Web Tools
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![CI](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-web-tools)](LICENSE) [![Selftest](https://img.shields.io/badge/selftest-155%20assertions-brightgreen)](#vector-self-test) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 Browser-side WOP merchant workbench: key generation · message interop · offline verification.
 
