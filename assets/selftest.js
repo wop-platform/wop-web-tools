@@ -342,6 +342,28 @@
       R.push(ok('A7 body 实参按有无收窄（GET/空 vs POST）', fails.length === 0, fails.join('；')));
     })();
 
+    // A7b 多行 body：PHP 单引号串保留字面换行（PHP 不解析 \n 转义序列，字面序列会篡改运行时 body → 签名断链）；其余语言以转义序列嵌入（各自语言解析后还原） // spec:WF9-A7
+    (function () {
+      var fails = [];
+      var ML_BODY = '{\n  "k": "v"\n}';
+      var ML_CTX = { appKey: 'ak', suite: RSA_CTX.suite, host: RSA_CTX.host, merchantPriv: RSA_CTX.merchantPriv, platformPub: RSA_CTX.platformPub, method: 'POST', path: '/v1/ml', body: ML_BODY, level: 'L2' };
+      var SEQ_BODY = '{\\n  \\"k\\\": \\"v\\"\\n}'; // C 风格双引号（Java/Go/Py/C#）：换行→\n 序列、双引号→\" 序列
+      var TS_BODY = '{\\n  "k": "v"\\n}';            // TS 单引号串：换行→\n 序列、双引号字面（JS 解析 \n 后还原）
+      for (var i = 0; i < LANGS.length; i++) {
+        var lang = LANGS[i];
+        var s = T[lang](ML_CTX);
+        if (lang === 'php') {
+          if (s.indexOf(ML_BODY) < 0) fails.push('php 多行 body 应以字面换行嵌入');
+          if (s.indexOf('\\n') >= 0) fails.push('php 片段含字面 \\n 序列（PHP 单引号不解析，运行时 body 被篡改）');
+        } else if (lang === 'typescript') {
+          if (s.indexOf(TS_BODY) < 0) fails.push('ts 多行 body 缺 \\n 转义序列形态（JS 单引号串禁止字面换行）');
+        } else {
+          if (s.indexOf(SEQ_BODY) < 0) fails.push(lang + ' 多行 body 缺 \\n/\\" 转义序列形态');
+        }
+      }
+      R.push(ok('A7b 多行 body：PHP 字面换行，其余语言转义序列', fails.length === 0, fails.join('；')));
+    })();
+
     // A8（否定式）I7：失败分支仅记录模糊化 reason；I7 行与其后 2 行不得出现明文/内部细节 // spec:WF9-A8
     (function () {
       var fails = [];

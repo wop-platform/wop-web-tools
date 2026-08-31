@@ -50,10 +50,9 @@
       .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
       .replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
   }
-  function escPhp(s) { // PHP 单引号字面量（' 与 \ 需转义；$、" 为字面），单行化
+  function escPhp(s) { // PHP 单引号字面量（仅 ' 与 \ 需转义；$、"、换行/制表符均为字面——PHP 单引号串可跨行且不解析转义序列）
     return String(s == null ? '' : s)
-      .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-      .replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+      .replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
   function val(v, ph) { v = v == null ? '' : String(v); return v.replace(/^\s+|\s+$/g, '') === '' ? ph : v; }
   function hasSM(suite) { return String(suite || '').indexOf('SM2') !== -1; }
@@ -221,10 +220,10 @@
     L.push('// ' + CONFIG_NOTE);
     L.push('const config = {');
     L.push("  appKey: '" + escSq(val(c.appKey, '<appKey>')) + "',");
-    L.push("  suite: '" + escDq(c.suite) + "',");
+    L.push("  suite: '" + escSq(c.suite) + "',");
     L.push("  merchantPrivateKey: '" + escSq(val(c.merchantPriv, '<商户私钥：PEM 或单行 Base64>')) + "',");
     L.push("  platformPublicKey: '" + escSq(val(c.platformPub, '<平台公钥：PEM 或单行 Base64>')) + "',");
-    L.push("  gatewayBaseUrl: '" + escDq(c.host) + "',");
+    L.push("  gatewayBaseUrl: '" + escSq(c.host) + "',");
     L.push('};');
     L.push('const wop = new WopClient(config);');
     L.push('// ' + TRANSPORT.typescript);
@@ -311,7 +310,7 @@
       L.push('// ' + CONFIG_NOTE);
       L.push('$config = \\wop_config([');
       L.push("    'appKey'             => '" + escPhp(val(c.appKey, '<appKey>')) + "',");
-      L.push("    'suite'              => '" + escDq(c.suite) + "', // 触发首版不支持路径");
+      L.push("    'suite'              => '" + escPhp(c.suite) + "', // 触发首版不支持路径");
       L.push("    'merchantPrivateKey' => '" + escPhp(val(c.merchantPriv, '<SM2 私钥：d 标量>')) + "',");
       L.push("    'platformPublicKey'  => '" + escPhp(val(c.platformPub, '<SM2 公钥：04‖X‖Y>')) + "',");
       L.push("    'gatewayBaseUrl'     => '" + escPhp(c.host) + "',");
@@ -320,7 +319,7 @@
       L.push('');
       L.push('try {');
       L.push("    // 首版在此抛出：\\WopUnsupportedSuiteException —— '" + SM_THROW_MARK + "'");
-      L.push("    $draft = \\wop_build_request($config, '" + c.method + "', '" + escDq(c.path) + "'" + (c.noBody ? '' : ", $body, '" + c.level + "'") + '); // 不可达');
+      L.push("    $draft = \\wop_build_request($config, '" + c.method + "', '" + escPhp(c.path) + "'" + (c.noBody ? '' : ", $body, '" + c.level + "'") + '); // 不可达');
       L.push('    // 以下调用同样不可达（SM2-SM3 套件下 SDK 均显式抛错）');
       L.push('    $result = \\wop_verify_response($config, $respHeaders, $respBody); // 不可达');
       L.push("    $cb = \\wop_verify_callback($config, $cbHeaders, $cbBody, '/callback/wop'); // 不可达");
@@ -336,7 +335,7 @@
     L.push('// ' + CONFIG_NOTE);
     L.push('$config = \\wop_config([');
     L.push("    'appKey'             => '" + escPhp(val(c.appKey, '<appKey>')) + "',  // ① appKey（终端用户输入框取值）");
-    L.push("    'suite'              => '" + escDq(c.suite) + "',  // ② securityReq 安全套件");
+    L.push("    'suite'              => '" + escPhp(c.suite) + "',  // ② securityReq 安全套件");
     L.push("    'merchantPrivateKey' => '" + escPhp(val(c.merchantPriv, '<商户私钥：PEM 或单行 Base64>')) + "',  // ③ 商户私钥");
     L.push("    'platformPublicKey'  => '" + escPhp(val(c.platformPub, '<平台公钥：PEM 或单行 Base64>')) + "',  // ④ 平台公钥");
     L.push("    'gatewayBaseUrl'     => '" + escPhp(c.host) + "',");
