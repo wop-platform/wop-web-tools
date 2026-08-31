@@ -88,17 +88,6 @@
     if (!/^[0-9a-f]+$/.test(v) || v.length !== len) throw new Error(what + ' 应为 ' + len + ' 位 hex');
     return v;
   }
-  // GM-08：sm2VerifyB64u 首字节 0x30 拒绝规则会误拒约 1/256 合法裸签名（随机 r 可 0x30 开头），
-  // 页面现算签名时重签避开（黄金自测同策略；上限 64 次）。
-  function signNo30(canonical, privHex, userId) {
-    var g = C();
-    var bytes = g.utf8Encode(canonical);
-    for (var i = 0; i < 64; i++) {
-      var sig = g.sm2SignBytes(bytes, privHex, userId);
-      if (g.bytesFromB64u(sig)[0] !== 0x30) return sig;
-    }
-    throw new Error('SM2 签名重试超限（0x30 前缀规避）');
-  }
 
   // ---------------------------------------------------------------------------
   // CSS（作用域 wf-gm-*；变量回退保证独立页可用）
@@ -172,7 +161,7 @@
     '        <textarea id="wf-gm-req-body" rows="2" spellcheck="false">{"orderId":"W20260831001","amount":100}</textarea></div>',
     '    </div>',
     '    <div class="grid3">',
-    '      <div class="field"><label for="wf-gm-req-appkey">x-wop-appkey（必填，SM2 userId）</label>',
+    '      <div class="field"><label for="wf-gm-req-appkey" data-i18n="wf-gm.req.appkey">x-wop-appkey（必填，SM2 userId）</label>',
     '        <input id="wf-gm-req-appkey" spellcheck="false" placeholder="demo_app_key"></div>',
     '      <div class="field"><label for="wf-gm-req-path" data-i18n="wf-gm.req.path">网关路径</label>',
     '        <input id="wf-gm-req-path" spellcheck="false" value="/gateway/trade.order.create"></div>',
@@ -302,7 +291,7 @@
       var authString = 'v1/' + expired;
       var canonical = CANON(authString, 'POST', path, '', CH(headers));
       var names = Object.keys(headers).sort().join(';');
-      var sig = signNo30(canonical, privHex, appkey);
+      var sig = g.sm2SignBytes(g.utf8Encode(canonical), privHex, appkey);
       var signHeader = SUITE + ' ' + authString + '/' + names + '/' + sig;
       steps.push({ ok: true, text: T('wf-gm.req.st.sign', 'canonicalRequest 已签名（SM2，userId = x-wop-appkey 值）') });
       steps.push({ ok: true, text: T('wf-gm.req.st.done', '构造完成，可填充验证区自验') });
@@ -406,7 +395,7 @@
   }
 
   // 黄金向量快捷填充：黄金密文字节（sm4CtTagB64u / sm2EncB64u）100% 复用，
-  // 仅 nonce/timestamp/签名现算（签名走 0x30 规避循环），五步应全绿。
+  // 仅 nonce/timestamp/签名现算，五步应全绿。
   function fillGolden(l2) {
     var g = C();
     var G = g.GOLDEN_SM;
@@ -419,7 +408,7 @@
     headers['x-wop-timestamp'] = String(Date.now());
     var path = $('wf-gm-ver-path').value.trim() || '/gateway/trade.order.create';
     var canonical = CANON('v1/1800', 'POST', path, '', CH(headers));
-    var sig = signNo30(canonical, G.privHex, G.appKey);
+    var sig = g.sm2SignBytes(g.utf8Encode(canonical), G.privHex, G.appKey);
     var signHeader = SUITE + ' v1/1800/' + Object.keys(headers).sort().join(';') + '/' + sig;
 
     $('wf-gm-ver-vpub').value = G.pubHex;

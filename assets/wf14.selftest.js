@@ -284,20 +284,7 @@
           var dk = els[i4].getAttribute('data-i18n');
           if (dk) used[dk] = 1;
         }
-        if (ENV.real) {
-          var scs = document.querySelectorAll('script');
-          var reDict = /var DICT = \{[\s\S]*?\n\s*\};/g;
-          var reKey = /(['"])(?:main|wf9|wf10|wf11|wf12|wf-gm|wf14)\.(?:[A-Za-z0-9_]+\.)*[A-Za-z0-9_]+\1/g;
-          for (var i5 = 0; i5 < scs.length; i5++) {
-            var lines = (scs[i5].textContent || '').replace(reDict, '\n').split('\n');
-            for (var i6 = 0; i6 < lines.length; i6++) {
-              var tr = lines[i6].trim();
-              if (tr.indexOf('//') === 0 || tr.indexOf('/*') === 0 || tr.indexOf('*') === 0) continue;
-              var ms = lines[i6].match(reKey);
-              if (ms) for (var i7 = 0; i7 < ms.length; i7++) used[ms[i7].slice(1, -1)] = 1;
-            }
-          }
-        }
+        // 源码级使用侧键扫描已迁至 scan_banned.mjs SCAN-4（外链 script 的 textContent 为空，页内扫是假绿）
         var miss = [];
         for (var k in used) {
           if (!hasOwn(used, k)) continue;
@@ -306,7 +293,7 @@
         }
         if (miss.length) { ok = false; why = (why ? why + '; ' : '') + '使用侧缺口 ' + miss.length + ' 键:' + miss.slice(0, 8).join(','); }
         A('使用侧键全量被 DICT 覆盖', ok,
-          why || ('使用侧 ' + n + ' 键（' + (ENV.real ? 'DOM+script 扫描' : 'Node：zh 完整性+硬键') + '）/ DICT ' + keys.length + ' 键全命中'));
+          why || ('使用侧 ' + n + ' 键（' + (ENV.real ? 'DOM 扫描' : 'Node：zh 完整性+硬键') + '）/ DICT ' + keys.length + ' 键全命中'));
       } catch (e) { A('使用侧键全量被 DICT 覆盖', false, '抛异常:' + e.message); }
     })();
 

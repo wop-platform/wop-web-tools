@@ -185,7 +185,8 @@ export function sm2SignBytes(msgBytes, privHex, userId) {
 }
 
 /**
- * SM3withSM2 验签。内部先拒 DER：b64u 解码后长度 ≠ 64 或首字节 0x30 → false（任务书规格）。
+ * SM3withSM2 验签。内部先拒 DER：b64u 解码后长度 ≠ 64 → false（DER 序列长度恒 ≠64；
+ * 首字节 0x30 是合法裸签名的自然形态，不拒——见 GM-07b）。
  * 任何异常一律 false（不抛出），失败原因对外保持模糊（I7）。
  */
 export function sm2VerifyB64u(msgBytes, sigB64u, pubHex, userId) {
@@ -193,7 +194,6 @@ export function sm2VerifyB64u(msgBytes, sigB64u, pubHex, userId) {
     if (!b64uOk(sigB64u)) return false;
     const sigBytes = bytesFromB64u(sigB64u);
     if (sigBytes.length !== 64) return false;   // DER 序列长度恒 ≠64
-    if (sigBytes[0] === 0x30) return false;     // DER SEQUENCE 头
     return sm2.doVerifySignature(msgBytes, hexFromBytes(sigBytes), requireHex(pubHex, 130),
       { hash: true, userId: userId || SM2_USER_ID }) === true;
   } catch (e) {
@@ -450,14 +450,9 @@ export function smGoldenSelfTest() {
   function signHdr(names, sigB64u) {
     return 'WOP-SM2-SM3 v1/1800/' + names + '/' + sigB64u;
   }
-  // 期望验签通过的场景：重签规避 0x30 前缀（sm2VerifyB64u 按 GM-08 拒 0x30，否则 1/256 闪失败）
+  // 期望验签通过的场景：直接裸签名（64B r‖s，b64u 86 字符；0x30 头合法，见 GM-07b）
   function signValid(canonical, privHex) {
-    const bytes = utf8Encode(canonical);
-    for (let i = 0; i < 64; i++) {
-      const s = sm2SignBytes(bytes, privHex);
-      if (bytesFromB64u(s)[0] !== 0x30) return s;
-    }
-    throw new Error('signValid: 64 次重签均 0x30 前缀');
+    return sm2SignBytes(utf8Encode(canonical), privHex);
   }
 
   // spec:GM-01 SM3 黄金摘要字节级一致
@@ -490,25 +485,28 @@ export function smGoldenSelfTest() {
     return sm2VerifyB64u(msgBytes, G.sigB64u, pubHex) === true || 'verify=false';
   });
 
-  // spec:GM-07 DER 签名被拒：真实 DER（长度≠64）与 64B 伪 0x30 头均 false（否定式）
+  // spec:GM-07 DER 签名被拒：真实 DER（长度≠64）false（否定式）；
+  //   64B 首字节 0x30 的串是合法裸签名（随机 r 约 1/256 以 0x30 开头）——应被接受（正向，见 GM-07b）
   t('GM-07', 'DER 签名被拒', function () {
     const derHex = sm2.doSignature(msgBytes, privHex, { hash: true, userId: G.sm2UserId, der: true });
     const derB64u = b64uFromBytes(bytesFromHex(derHex));
-    if (sm2VerifyB64u(msgBytes, derB64u, pubHex) !== false) return '真实 DER 未被拒';
-    const fake = new Uint8Array(64); fake[0] = 0x30;
-    if (sm2VerifyB64u(msgBytes, b64uFromBytes(fake), pubHex) !== false) return '0x30 头未被拒';
-    return true;
+    return sm2VerifyB64u(msgBytes, derB64u, pubHex) === false || '真实 DER 未被拒';
+  });
+
+  // spec:GM-07b 首字节 0x30 的合法裸签名必须被接受（旧规则误拒约 1/256 合法签名；循环至命中）
+  t('GM-07b', '0x30 头裸签名被接受', function () {
+    for (let i = 0; i < 1024; i++) {
+      const sig = sm2SignBytes(msgBytes, privHex);
+      if (bytesFromB64u(sig)[0] === 0x30) {
+        return sm2VerifyB64u(msgBytes, sig, pubHex) === true || '0x30 头合法签名被误拒';
+      }
+    }
+    return '1024 次未命中 0x30 头（1/256 概率，异常）';
   });
 
   // spec:GM-08 自签名裸 r‖s（128 hex / b64u 86 字符）且自验通过
-  //   注：随机 k 下 r 首字节可能为 0x30，被任务书规定的 DER 头拒绝规则命中——
-  //   此处重签至避开（概率 1/256），该规则冲突已在 README 上报。
   t('GM-08', '自签名裸 r‖s 自验', function () {
-    let sigHex = '', tries = 0;
-    while (tries++ < 64) {
-      sigHex = sm2.doSignature(msgBytes, privHex, { hash: true, userId: G.sm2UserId });
-      if (!sigHex.startsWith('30')) break;
-    }
+    const sigHex = sm2.doSignature(msgBytes, privHex, { hash: true, userId: G.sm2UserId });
     if (sigHex.length !== 128) return 'hex 长度 ' + sigHex.length;
     const sigB64u = b64uFromBytes(bytesFromHex(sigHex));
     if (sigB64u.length !== 86) return 'b64u 长度 ' + sigB64u.length;

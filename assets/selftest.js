@@ -595,7 +595,6 @@
     var intField = null, boolField = null;
     subModel.forEach(function (f) {
       if (f.path === 'expireDays') intField = f;
-      if (f.path === 'expireDays') boolField = boolField;
     });
     var wbInfoModel = C.formModelFor(findOp('waybillInfoQuery').op);
     wbInfoModel.forEach(function (f) { if (f.path === 'withDetails') boolField = f; });

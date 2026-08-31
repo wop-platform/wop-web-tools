@@ -26,7 +26,7 @@ rejected) aligned with the golden vectors in wop-specs. Run it before trusting o
 
 - `docs/intent.md` — intent and boundaries
 - `docs/spec.md` — spec (clause-based, with decision records)
-- `assets/` — page source of truth (the shell loads 13 deferred scripts in order: core → feature slices → selftest → boot)
+- `assets/` — page source of truth (the shell loads 12 deferred scripts + main.css = 13 assets, in order: core → feature slices → selftest → boot)
 
 ## Ecosystem
 

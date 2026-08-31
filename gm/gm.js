@@ -3,7 +3,7 @@
  * 集成接线点：
  *   - 三个区块分别落位（见 HTML_FRAG 头部锚点注释），或整体注入后按 section 拆分；
  *   - init(mount?) 幂等：根节点不存在时注入 html+css（mount 为元素或选择器，缺省 body）；
- *   - registry.selftest() 组合 gmcore 黄金断言（22 条）+ gm.selftest.js 页面断言（P1..P10）；
+ *   - registry.selftest() 组合 gmcore 黄金断言（24 条）+ gm.selftest.js 页面断言（P1..P10）；
  *   - window.GM 适配器（WF_CONTRACT §33）在本文件加载时建立，供其他切片复用国密原语。
  * 断言标签：// spec:GM-P*（页面）与 gmcore 内 // spec:GM-*（核心），矩阵见 gm/README.md。
  */
@@ -86,17 +86,6 @@
     v = String(v == null ? '' : v).trim().toLowerCase();
     if (!/^[0-9a-f]+$/.test(v) || v.length !== len) throw new Error(what + ' 应为 ' + len + ' 位 hex');
     return v;
-  }
-  // GM-08：sm2VerifyB64u 首字节 0x30 拒绝规则会误拒约 1/256 合法裸签名（随机 r 可 0x30 开头），
-  // 页面现算签名时重签避开（黄金自测同策略；上限 64 次）。
-  function signNo30(canonical, privHex) {
-    var g = C();
-    var bytes = g.utf8Encode(canonical);
-    for (var i = 0; i < 64; i++) {
-      var sig = g.sm2SignBytes(bytes, privHex);
-      if (g.bytesFromB64u(sig)[0] !== 0x30) return sig;
-    }
-    throw new Error('SM2 签名重试超限（0x30 前缀规避）');
   }
 
   // ---------------------------------------------------------------------------
@@ -299,7 +288,7 @@
       var authString = 'v1/' + expired;
       var canonical = CANON(authString, 'POST', path, '', CH(headers));
       var names = Object.keys(headers).sort().join(';');
-      var sig = signNo30(canonical, privHex);
+      var sig = g.sm2SignBytes(g.utf8Encode(canonical), privHex);
       var signHeader = SUITE + ' ' + authString + '/' + names + '/' + sig;
       steps.push({ ok: true, text: T('wf-gm.req.st.sign', 'canonicalRequest 已签名（SM2，userId 1234567812345678）') });
       steps.push({ ok: true, text: T('wf-gm.req.st.done', '构造完成，可填充验证区自验') });
@@ -400,7 +389,7 @@
   }
 
   // 黄金向量快捷填充：黄金密文字节（sm4CtTagB64u / sm2EncB64u）100% 复用，
-  // 仅 nonce/timestamp/签名现算（签名走 0x30 规避循环），五步应全绿。
+  // 仅 nonce/timestamp/签名现算，五步应全绿。
   function fillGolden(l2) {
     var g = C();
     var G = g.GOLDEN_SM;
@@ -412,7 +401,7 @@
     headers['x-wop-timestamp'] = String(Date.now());
     var path = $('wf-gm-ver-path').value.trim() || '/gateway/trade.order.create';
     var canonical = CANON('v1/1800', 'POST', path, '', CH(headers));
-    var sig = signNo30(canonical, G.privHex);
+    var sig = g.sm2SignBytes(g.utf8Encode(canonical), G.privHex);
     var signHeader = SUITE + ' v1/1800/' + Object.keys(headers).sort().join(';') + '/' + sig;
 
     $('wf-gm-ver-vpub').value = G.pubHex;

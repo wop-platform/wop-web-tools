@@ -78,12 +78,12 @@ WOP 网关国密套件（SM2 签名/信封 + SM3 摘要 + SM4-GCM 报文加密�
 3. **套件下拉**：`r-suite` 增加 option 值 `WOP-SM2-SM3`；`verifyResponse` 按 securityReq 前缀 `WOP-SM2-SM3` 分派到本切片验证面板。
 4. **canonical 同源**：优先复用宿主页 `window.canonicalHeaders` / `window.buildCanonical`（与验签同页同源），gm.js 内 `chLocal`/`canonLocal` 仅作独立页回退。
 5. **window.GM 适配器**：可选依赖——宿主页已有 GM 原语面时直接使用；缺失时切片仍独立自洽。
-6. **页面断言入口**：`window.GM_PAGE_SELFTEST()`（P2 自初始化，不依赖集成器先行调用）；`registry.selftest()` 组合 core 23 条 + 页面 10 条。
+6. **页面断言入口**：`window.GM_PAGE_SELFTEST()`（P2 自初始化，不依赖集成器先行调用）；`registry.selftest()` 组合 core 24 条 + 页面 10 条。
 
 ## 偏差上报（与任务书/推导依据的差异）
 
 1. **digest 覆盖线上密文 body**（非明文）：按 F6 固定顺序（验签→digest→DEK→族比对→解密）与 `index.html` 291 行注释推导——digest 步必须先于解密判密文完整性。
-2. **0x30 前缀拒绝规则保留**（GM-07/GM-08 按任务书规格）：`sm2SignBytes` 有 1/256 概率产出 0x30 开头签名被自家验证器拒；页面 `signNo30` 与自测 `signValid` 以 ≤64 次重签规避，核心规格不变。
+2. **0x30 前缀拒绝规则已移除**（2026-08-31 CodeRabbit 修复）：旧规则按任务书拒首字节 0x30 的裸签名，但 SM2 裸 r‖s 中 r 随机，约 1/256 合法签名以 0x30 开头会被误拒；现仅按长度（≠64）拒 DER，0x30 头合法签名接受（GM-07b 正向断言），`signNo30`/`signValid` 重签规避全部删除。
 3. **任务书 `spec:WF9-*` 为笔误**：本切片全部使用 `spec:GM-*` 标签。
 4. **x-wop-sign 四段格式初始未测**（本轮修复的契约缺陷）：`verifySmSuite` 曾把完整签名头 `'WOP-SM2-SM3 v1/1800/<names>/<sig>'` 整串当 sigB64u 验签（恒 false），而自测 5 处调用传裸 sig——自测格式与线上格式漂移，四段解析路径从未被测到（node 22/22 全绿是假象）。已改：核心内部剥四段（格式/套件不符一律验签失败），自测同步用线上格式，GM-23 防再漂移。
 
@@ -91,7 +91,7 @@ WOP 网关国密套件（SM2 签名/信封 + SM3 摘要 + SM4-GCM 报文加密�
 
 ```bash
 npx esbuild gm/gmcore.mjs --bundle --format=iife --global-name=GmCore --minify --outfile=gm/gmcore.js
-node gm/test.mjs        # gmcore 23/23 + 静态扫描 5 文件 ALL GREEN
+node gm/test.mjs        # gmcore 24/24 + 静态扫描 5 文件 ALL GREEN
 ```
 
-浏览器级：将 `gmcore.js` → `gm.selftest.js` → `gm.js` 依序内联独立页（替换占位符须用 replacer 函数防 `$` 截断，内联前检测 `</script`），加载后 `WF_REGISTRY['wf-gm'].init()` → `GM_PAGE_SELFTEST()`（10/10）→ `registry.selftest()`（33/33）。本轮实测：node 23/23、页面 10/10、registry 33/33、黄金 L2 `#wf-gm-ver-steps[data-allok]=1`。
+浏览器级：将 `gmcore.js` → `gm.selftest.js` → `gm.js` 依序内联独立页（替换占位符须用 replacer 函数防 `$` 截断，内联前检测 `</script`），加载后 `WF_REGISTRY['wf-gm'].init()` → `GM_PAGE_SELFTEST()`（10/10）→ `registry.selftest()`（33/33）。本轮实测：node 24/24、页面 10/10、registry 34/34、黄金 L2 `#wf-gm-ver-steps[data-allok]=1`。

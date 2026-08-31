@@ -38,7 +38,7 @@
 
 - `docs/intent.md` — 意图与边界
 - `docs/spec.md` — 规格（条款化，含决策记录与反向核对矩阵）
-- `assets/` — 页面源码真源（壳按 13 个 `defer` 脚本按序加载：core → 各功能切片 → selftest → boot）
+- `assets/` — 页面源码真源（壳按 12 个 `defer` 脚本按序加载（+ main.css 共 13 资产）：core → 各功能切片 → selftest → boot）
 - 国密内核：`gm/gmcore.mjs`（sm-crypto-v2 审计内置，黄金向量字节级对齐）
 
 ## 生态
