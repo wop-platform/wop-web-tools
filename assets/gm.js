@@ -1,9 +1,10 @@
+/* ===== gm/gm.js ===== */
 /*! wf-gm：国密 WOP-SM2-SM3 套件页面切片（源真相；gm.html/gm.css 由本文件 registry 字段生成）
  * 依赖加载顺序：gmcore.js（window.GmCore）→ wf14.js（可选）→ 本文件。
  * 集成接线点：
  *   - 三个区块分别落位（见 HTML_FRAG 头部锚点注释），或整体注入后按 section 拆分；
  *   - init(mount?) 幂等：根节点不存在时注入 html+css（mount 为元素或选择器，缺省 body）；
- *   - registry.selftest() 组合 gmcore 黄金断言（24 条）+ gm.selftest.js 页面断言（P1..P10）；
+ *   - registry.selftest() 组合 gmcore 黄金断言（22 条）+ gm.selftest.js 页面断言（P1..P10）；
  *   - window.GM 适配器（WF_CONTRACT §33）在本文件加载时建立，供其他切片复用国密原语。
  * 断言标签：// spec:GM-P*（页面）与 gmcore 内 // spec:GM-*（核心），矩阵见 gm/README.md。
  */
@@ -125,7 +126,7 @@
     '',
     '  <section id="wf-gm-keygen" class="card">',
     '    <h3 data-i18n="wf-gm.keygen.title">SM2 密钥对生成（国密）</h3>',
-    '    <p class="hint" data-i18n="wf-gm.keygen.hint">生成 SM2 密钥对：私钥 d（hex / Base64 / PKCS#8 PEM）与公钥（hex / Base64）。签名与验签 userId 固定 1234567812345678（与 BC 侧一致，隐式默认）。</p>',
+    '    <p class="hint" data-i18n="wf-gm.keygen.hint">生成 SM2 密钥对：私钥 d（hex / Base64 / PKCS#8 PEM）与公钥（hex / Base64）。签名与验签 userId 取 x-wop-appkey 头值（契约，2026-08-31 飞书裁决）；golden 向量夹具固定 1234567812345678。</p>',
     '    <div class="wf-gm-bar">',
     '      <button id="wf-gm-keygen-btn" class="primary" type="button" data-i18n="wf-gm.keygen.btn">生成 SM2 密钥对</button>',
     '      <label class="wf-gm-check"><input type="checkbox" id="wf-gm-keygen-pem"><span data-i18n="wf-gm.keygen.pem">同时输出 PKCS#8 PEM</span></label>',
@@ -160,7 +161,7 @@
     '        <textarea id="wf-gm-req-body" rows="2" spellcheck="false">{"orderId":"W20260831001","amount":100}</textarea></div>',
     '    </div>',
     '    <div class="grid3">',
-    '      <div class="field"><label for="wf-gm-req-appkey">x-wop-appkey（可选）</label>',
+    '      <div class="field"><label for="wf-gm-req-appkey" data-i18n="wf-gm.req.appkey">x-wop-appkey（必填，SM2 userId）</label>',
     '        <input id="wf-gm-req-appkey" spellcheck="false" placeholder="demo_app_key"></div>',
     '      <div class="field"><label for="wf-gm-req-path" data-i18n="wf-gm.req.path">网关路径</label>',
     '        <input id="wf-gm-req-path" spellcheck="false" value="/gateway/trade.order.create"></div>',
@@ -250,6 +251,7 @@
     $('wf-gm-req-priv').value = lastKeys.privateHex;
     $('wf-gm-req-pub').value = lastKeys.publicHex;
     $('wf-gm-req-ppriv').value = lastKeys.privateHex;
+    $('wf-gm-req-appkey').value = 'demo_app_key';
     toastMsg(T('wf-gm.req.filled', '已用生成密钥自闭环填充'));
   }
 
@@ -264,6 +266,7 @@
       var path = $('wf-gm-req-path').value.trim() || '/gateway/trade.order.create';
       var expired = String(parseInt($('wf-gm-req-expired').value || '1800', 10) || 1800);
       var appkey = $('wf-gm-req-appkey').value.trim();
+      if (!appkey) throw new Error(T('main.ver.gm.needappkey', 'x-wop-appkey 必填（SM2 userId 契约：userId = x-wop-appkey 值）'));
       var wire, digest, encHdr = '', dekPlain = '';
 
       if (useL2) {
@@ -288,9 +291,9 @@
       var authString = 'v1/' + expired;
       var canonical = CANON(authString, 'POST', path, '', CH(headers));
       var names = Object.keys(headers).sort().join(';');
-      var sig = g.sm2SignBytes(g.utf8Encode(canonical), privHex);
+      var sig = g.sm2SignBytes(g.utf8Encode(canonical), privHex, appkey);
       var signHeader = SUITE + ' ' + authString + '/' + names + '/' + sig;
-      steps.push({ ok: true, text: T('wf-gm.req.st.sign', 'canonicalRequest 已签名（SM2，userId 1234567812345678）') });
+      steps.push({ ok: true, text: T('wf-gm.req.st.sign', 'canonicalRequest 已签名（SM2，userId = x-wop-appkey 值）') });
       steps.push({ ok: true, text: T('wf-gm.req.st.done', '构造完成，可填充验证区自验') });
 
       $('wf-gm-req-canonical').textContent = canonical;
@@ -367,10 +370,13 @@
       var method = $('wf-gm-ver-method').value.trim() || 'POST';
       var path = $('wf-gm-ver-path').value.trim() || '/gateway/trade.order.create';
       var canonical = CANON(seg[0] + '/' + seg[1], method, path, '', CH(sub));
+      var userId = hmap['x-wop-appkey'];
+      if (!userId) throw new Error(T('main.ver.gm.needappkey', 'x-wop-appkey 必填（SM2 userId 契约：userId = x-wop-appkey 值）'));
       res = g.verifySmSuite(hmap, $('wf-gm-ver-body').value, {
         canonical: canonical,
         merchantPubHex: $('wf-gm-ver-vpub').value.trim() || undefined,
-        platformPrivHex: $('wf-gm-ver-dpriv').value.trim() || undefined
+        platformPrivHex: $('wf-gm-ver-dpriv').value.trim() || undefined,
+        userId: userId
       });
       steps = res.steps.map(function (s) {
         return { ok: s.ok, text: s.ok ? s.name : s.name + '：' + s.reason };
@@ -395,13 +401,14 @@
     var G = g.GOLDEN_SM;
     var body = l2 ? '{"encrypted":"' + G.sm4CtTagB64u + '"}' : G.message;
     var headers = {};
+    headers['x-wop-appkey'] = G.appKey;
     headers['x-wop-content-digest'] = g.buildSmDigest(body);
     if (l2) headers['x-wop-encrypt'] = 'L2;dek=' + G.sm2EncB64u;
     headers['x-wop-nonce'] = '00112233445566778899aabbccddeeff';
     headers['x-wop-timestamp'] = String(Date.now());
     var path = $('wf-gm-ver-path').value.trim() || '/gateway/trade.order.create';
     var canonical = CANON('v1/1800', 'POST', path, '', CH(headers));
-    var sig = g.sm2SignBytes(g.utf8Encode(canonical), G.privHex);
+    var sig = g.sm2SignBytes(g.utf8Encode(canonical), G.privHex, G.appKey);
     var signHeader = SUITE + ' v1/1800/' + Object.keys(headers).sort().join(';') + '/' + sig;
 
     $('wf-gm-ver-vpub').value = G.pubHex;
@@ -538,3 +545,4 @@
     try { ensureGM(); } catch (e) { /* gmcore 后加载时 init/selftest 再建 */ }
   }
 })();
+

@@ -1,0 +1,21 @@
+#!/bin/sh
+# wop-web-tools 本地提交门禁（与 .github/workflows/ci.yml 同源检查）
+# 启用：git config core.hooksPath .githooks
+# 全部检查 <1s：assets 语法 + wf14 自测 + DOM 结构 + S1/S2 禁词 + 国密金向量
+set -e
+cd "$(dirname "$0")/.."
+
+echo "[pre-commit] syntax gates (all assets)"
+for f in assets/*.js; do node --check "$f"; done
+
+echo "[pre-commit] wf14 selftest (expect 15/15)"
+(cat assets/wf14.js assets/wf14.selftest.js; echo 'var R = WF14_RUN_SELFTEST(); var p = R.filter(function(x){return x.pass;}).length; console.log("SELFTEST " + p + "/" + R.length); R.forEach(function(x,i){ if(!x.pass) console.log("FAIL " + (i+1) + ": " + x.name + " | " + x.detail); }); process.exit(p === R.length ? 0 : 1);') | node
+
+echo "[pre-commit] DOM structure checks"
+node dom_check.mjs
+
+echo "[pre-commit] S1/S2 banned token scan"
+node scan_banned.mjs
+
+echo "[pre-commit] gm golden vectors"
+node gm/test.mjs

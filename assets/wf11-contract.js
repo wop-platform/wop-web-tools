@@ -1,3 +1,4 @@
+/* ===== wf11/contract.js ===== */
 /**
  * WF11 — API 目录契约数据（独立文件，清晰可替换）。
  *
@@ -280,3 +281,4 @@
 
   window.WF11_CONTRACT = contract;
 })();
+

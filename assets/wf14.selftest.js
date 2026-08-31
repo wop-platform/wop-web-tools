@@ -1,3 +1,4 @@
+/* ===== wf14/wf14.selftest.js ===== */
 /* WF14 自测断言集 — 每条断言带 // spec:WF14-* 标签（grep 索引，见 wf14/README.md 断言矩阵）
  * 浏览器：集成者接入 runSelftest → WF_REGISTRY['wf14'].selftest()
  * Node 单测：cat wf14/wf14.js wf14/wf14.selftest.js <runner> | node（Node>=12）
@@ -257,9 +258,83 @@
       A('init 按钮接线/激活态同步', ok, why);
     })();
 
+    /* 14 // spec:WF14-FULL-COVERAGE — 使用侧引用键 ⊆ DICT：DOM data-i18n + 页面 script 键字面量
+     *     （剔除 DICT 区/注释行/自测假键）全部 ∈ collectKeys()；zh 全键非 sentinel；
+     *     硬断言 wf10.diff 四状态键（历史 72 键缺口回归锚点） */
+    (function () {
+      var ok = true, why = '', n = 0;
+      try {
+        WF14.setLang('zh');
+        var keys = WF14.collectKeys();
+        var have = {};
+        for (var i = 0; i < keys.length; i++) have[keys[i]] = 1;
+        var zhHole = [];
+        for (var i2 = 0; i2 < keys.length; i2++) {
+          if (WF14.t(keys[i2], '\u0000') === '\u0000') zhHole.push(keys[i2]);
+        }
+        if (zhHole.length) { ok = false; why = 'zh 缺值:' + zhHole.slice(0, 5).join(','); }
+        var hard = ['wf10.diff.same', 'wf10.diff.diff', 'wf10.diff.extra', 'wf10.diff.missing'];
+        var hardMiss = [];
+        for (var i3 = 0; i3 < hard.length; i3++) if (!have[hard[i3]]) hardMiss.push(hard[i3]);
+        if (hardMiss.length) { ok = false; why = (why ? why + '; ' : '') + '硬键缺失:' + hardMiss.join(','); }
+        var TESTONLY = { 'wf14.__missing': 1, 'wf14.__fr': 1, 'wf10.__ghost': 1 }; // 自测专用假键（不属使用侧）
+        var used = {};
+        var els = doc.querySelectorAll('[data-i18n]');
+        for (var i4 = 0; i4 < els.length; i4++) {
+          var dk = els[i4].getAttribute('data-i18n');
+          if (dk) used[dk] = 1;
+        }
+        // 源码级使用侧键扫描已迁至 scan_banned.mjs SCAN-4（外链 script 的 textContent 为空，页内扫是假绿）
+        var miss = [];
+        for (var k in used) {
+          if (!hasOwn(used, k)) continue;
+          n++;
+          if (!have[k] && !TESTONLY[k]) miss.push(k);
+        }
+        if (miss.length) { ok = false; why = (why ? why + '; ' : '') + '使用侧缺口 ' + miss.length + ' 键:' + miss.slice(0, 8).join(','); }
+        A('使用侧键全量被 DICT 覆盖', ok,
+          why || ('使用侧 ' + n + ' 键（' + (ENV.real ? 'DOM 扫描' : 'Node：zh 完整性+硬键') + '）/ DICT ' + keys.length + ' 键全命中'));
+      } catch (e) { A('使用侧键全量被 DICT 覆盖', false, '抛异常:' + e.message); }
+    })();
+
+    /* 15 // spec:WF14-ZH-RESTORE — en→zh 全量往返恢复：快照全页 [data-i18n]，en 期必须真实变化，
+     *     切回 zh 后 trim 逐一相等（Bug 2 回归锚点：切回中文后片段卡英文） */
+    (function () {
+      var ok = true, why = '', fixture = null;
+      try {
+        WF14.setLang('zh');
+        if (!ENV.real) {
+          fixture = [mkEl('main.kg.priv', WF14.t('main.kg.priv')), mkEl('wf14.lang.zh', WF14.t('wf14.lang.zh'))];
+        }
+        var els = doc.querySelectorAll('[data-i18n]');
+        var snap = [];
+        for (var i = 0; i < els.length; i++) snap.push([els[i], els[i].textContent]);
+        WF14.setLang('en');
+        var changed = 0;
+        for (var i2 = 0; i2 < snap.length; i2++) if (snap[i2][0].textContent !== snap[i2][1]) changed++;
+        WF14.setLang('zh');
+        var diff = 0;
+        for (var i3 = 0; i3 < snap.length; i3++) {
+          if (snap[i3][0].textContent.trim() !== snap[i3][1].trim()) {
+            diff++;
+            if (!why) why = '未恢复:' + snap[i3][0].getAttribute('data-i18n')
+              + ' "' + snap[i3][0].textContent.trim().slice(0, 24) + '"≠"' + snap[i3][1].trim().slice(0, 24) + '"';
+          }
+        }
+        if (changed === 0) { ok = false; why = 'en 期无任何文案变化（切换未生效）'; }
+        if (diff !== 0) ok = false;
+        A('en→zh 往返全量文案恢复', ok,
+          why || ('快照 ' + snap.length + ' 元素，en 期变化 ' + changed + '，zh 恢复 ' + (snap.length - diff) + '/' + snap.length));
+      } catch (e) {
+        A('en→zh 往返全量文案恢复', false, '抛异常:' + e.message);
+      } finally {
+        if (fixture) { for (var i4 = 0; i4 < fixture.length; i4++) rmEl(fixture[i4]); }
+      }
+    })();
     WF14.setLang(saved); // 还原语言状态（自测不改变页面现场）
     return R;
   }
 
   root.WF14_RUN_SELFTEST = run;
 })(typeof window !== 'undefined' ? window : globalThis);
+

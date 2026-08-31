@@ -1,3 +1,4 @@
+/* ===== wf9/wf9.js ===== */
 /* WF9 — 六语言 SDK 代码片段生成器（wop-web-tools 并行切片）
  * 依据：parallel/TASK_wf9.md、parallel/WF_CONTRACT.md、wop-specs/sdk/wop-sdk-spec.md §2（概念 API）
  * 纯字符串模板（node 可测）：tplJava / tplGo / tplTypeScript / tplPython / tplPhp / tplDotnet
@@ -611,3 +612,4 @@
     }
   };
 })();
+

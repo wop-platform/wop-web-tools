@@ -1,3 +1,4 @@
+/* ===== wf12/wf12.js ===== */
 /* ============================================================
  * WF12 — 数字信封 L0/L2 流程图解（教学交互）
  * 只读依赖（WF_CONTRACT 共享全局，均存在于 index.html）：
@@ -480,3 +481,4 @@
   if (typeof window !== 'undefined') window.WF12 = WF12;
   else if (typeof globalThis !== 'undefined') globalThis.WF12 = WF12;
 })();
+
