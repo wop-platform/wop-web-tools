@@ -68,8 +68,12 @@
 
 - ~~**WF7 整体粘贴解析**：粘贴原始 HTTP 请求（含全部头 + 体）自动拆分填入验证表单，免手抄头。~~
 - ~~**WF8 错误诊断**：粘贴错误响应 → 语义 + HTTP 映射 + 修复建议 + 排查路径（对齐 wop-troubleshoot 62 错误码目录）。~~
-- **WF9 代码片段生成**：同一请求产出六语言官方 SDK 调用片段（语义对齐 wop-sdk-spec，非手写易错版）。
-- **WF10 canonical 可视化**：canonicalRequest 逐段高亮展示 + 字段来源标注，定位签名偏差。
+- ~~**WF9 代码片段生成**：同一请求产出六语言官方 SDK 调用片段（语义对齐 wop-sdk-spec，非手写易错版）。~~
+- ~~**WF10 canonical 可视化**：canonicalRequest 逐段高亮展示 + 字段来源标注，定位签名偏差。~~
+- ~~**WF11 API 目录**：渲染 OpenAPI 3.1 契约（contracts 层），API 表单模板化生成请求。~~
+- ~~**WF12 教学图解**：数字信封流程（L0/L2）交互式演示。~~
+- ~~**WF13 SM2/SM3/SM4 套件**：WebCrypto 原生无 SM2/SM3/SM4，内置 sm-crypto-v2（审计+锁定）实现国密。~~
+- ~~**WF14 i18n**：UI 中英双语。~~
 
 **P2（路线图二期）**
 
@@ -131,7 +135,12 @@
 | WF6 dek | `// spec:WF6.dek` | DEK 三段式 + OAEP 解包 + MGF1 陷阱拒绝 | 正/负向量 |
 | WF6 formatRules | `// spec:WF6.formatRules` | 11 条：族比对推导 accept/reject | 正/负向量 |
 | WF7 粘贴解析 | `// spec:WF7`（runSelftest：正/负路径断言） | 解析→头/body 提取+回填；缺头/digest/ts 告警 | 功能+否定式 |
-| WF8 错误诊断 | `// spec:WF8`（runSelftest：字典/命中/未知分支断言） | 62 码计数+1022 命中+9999 未知分支 | 功能+否定式 |
+| WF9 代码片段 | `// spec:WF9-A1..A10/B1/B2`（runSelftest） | 六语言注册/渲染/复制，空输入与未知语言分支 | 功能+否定式 |
+| WF10 canonical 可视化 | `// spec:WF10-SPLIT/DIFF/EMPTY-*`（runSelftest） | 逐段解析+字段来源+差异比对，空 query/body 分支 | 功能+否定式 |
+| WF11 API 目录 | `// spec:WF11`（runSelftest：契约渲染断言） | 示例契约渲染+表单模板生成（OpenAPI 3.1 就绪） | 功能 |
+| WF12 教学图解 | `// spec:WF12.sign-demo/tamper-*`（runSelftest） | L0/L2 数字信封真实密码学演示 + 四错误路径拦截 | 功能+否定式 |
+| WF14 i18n | `// spec:WF14-*`（runSelftest）+ `WF14.collectKeys()` 差集 | 中英切换/级联/非法回退/事件；全 data-i18n key 有译 | 功能+否定式 |
+| WF13 国密 SM2-SM3 | `// spec:GM-P1..P10`（runSelftest 金向量）+ `// spec:GM-K1/K2/K3`（runSelftest 分派） | 黄金向量字节级（userId=1234567812345678）+ SPKI/PKCS#8 解析、RSA 混用拒收、内核缺失防护、坏签名 allOk=false | 功能+否定式 |
 | S1 零外发 | `// spec:S1`（scanSelfForBanned） | 源码自扫描：无外部 src/href、无 fetch/XHR/WS/Beacon | 否定式 |
 | S2 不落盘 | `// spec:S2`（scanSelfForBanned） | 源码自扫描：无 localStorage/sessionStorage/indexedDB | 否定式 |
 | G5 测试载体 | 本矩阵 + `// spec:<ID>` 注释 | 可 grep 索引 | 治理 |
@@ -143,7 +152,7 @@
 | # | 问题 | 结论 | 状态 |
 |---|---|---|---|
 | D1 | 回调语义 | 对齐 v1.0-ratified F3/F6，迁移即纠正页面推演标注与步骤顺序 | **已定**（advisory 核实） |
-| D2 | SM2 支持时机 | 默认首版仅 RSA、国密列 P2 路线图（Q7 精神；WebCrypto 无 SM2 需三方库） | 待拍板 |
+| D2 | SM2 支持时机 | 已实现（WF13）：内置 sm-crypto-v2（审计+版本锁定），gm 面板 + verifyResponse 分派；userId 契约空白见 wop-specs 上报 | **已落地**（2026-08-31） |
 | D3 | 仓库归属 | 默认 wop-platform 组织 / `wop-web-tools` | 待拍板 |
 | D4 | 语言 | README 中文默认 + 英文（循惯例） | **已定** |
 | D5 | 产物形态 | 源码多文件 + 构建产物单文件（保留离线卖点） | 默认采纳 |
@@ -171,3 +180,4 @@
 
  优先级：P0 = 现有两场景上线 + WF5 顺序纠正 + WF6 向量自测 + WF7 粘贴解析 + WF8 错误诊断（2026-08-31 落地）
 → P1 = WF9–WF10（代码片段、canonical 可视化）→ P2 = WF11–WF14（目录、教学、SM2、i18n）。
+**全部已落地**：2026-08-31 增强批次二——WF9/10/11/12/14 + WF13 国密 SM2-SM3（sm-crypto-v2 内置）随集成 commit 交付；自测 126 项全绿，变更区覆盖 100%。
