@@ -1,0 +1,38 @@
+<!-- WF9 代码片段面板（六语言 SDK 接入示例）
+     锚点建议：插入到 #tab-request 内，紧跟「请求字段」section（#build-req 按钮所在 card）之后，
+     作为同级 <details> 卡片。集成者负责落位并在 DOM 就绪后调用 WF_REGISTRY['wf9'].init()。 -->
+<details id="wf9-root" class="wf9-card">
+  <summary class="wf9-summary">
+    <span class="i18n" data-i18n="wf9.title">SDK 代码片段（六语言）</span>
+    <span class="wf9-sub i18n" data-i18n="wf9.subtitle">基于 wop-sdk-spec 概念 API 推导，最终以官方 SDK 为准</span>
+  </summary>
+  <div class="wf9-toolbar">
+    <div class="wf9-langs" id="wf9-langs">
+      <button type="button" class="wf9-lang active" data-wf9-lang="java">Java</button>
+      <button type="button" class="wf9-lang" data-wf9-lang="go">Go</button>
+      <button type="button" class="wf9-lang" data-wf9-lang="typescript">TypeScript</button>
+      <button type="button" class="wf9-lang" data-wf9-lang="python">Python</button>
+      <button type="button" class="wf9-lang" data-wf9-lang="php">PHP</button>
+      <button type="button" class="wf9-lang" data-wf9-lang="dotnet">.NET</button>
+    </div>
+    <div class="wf9-opts">
+      <label for="wf9-suite"><span class="i18n" data-i18n="wf9.suite">套件</span></label>
+      <select id="wf9-suite">
+        <option value="auto" selected data-i18n="wf9.suite.auto">跟随请求构造 Tab</option>
+        <option value="WOP-RSA3072-SHA256">WOP-RSA3072-SHA256</option>
+        <option value="WOP-RSA4096-SHA256">WOP-RSA4096-SHA256</option>
+        <option value="WOP-SM2-SM3">WOP-SM2-SM3</option>
+      </select>
+      <label for="wf9-method"><span class="i18n" data-i18n="wf9.method">方法</span></label>
+      <select id="wf9-method">
+        <option value="POST" selected>POST</option>
+        <option value="GET">GET</option>
+      </select>
+      <button type="button" class="wf9-copy" id="wf9-copy"><span class="i18n" data-i18n="wf9.copy">复制片段</span></button>
+    </div>
+  </div>
+  <div id="wf9-hint" class="wf9-hint" hidden></div>
+  <pre id="wf9-code" class="wf9-code" tabindex="0"></pre>
+  <p class="wf9-note"><span class="i18n" data-i18n="wf9.note">片段为推导示例（wop-sdk-spec §2 概念 API），非可执行代码；接入请以官方 wop-&lt;lang&gt;-sdk（v0.1.0，MIT）为准</span></p>
+  <span class="wf9-sr" id="wf9-copy-status" role="status" aria-live="polite"></span>
+</details>
