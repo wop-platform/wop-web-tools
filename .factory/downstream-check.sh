@@ -24,7 +24,8 @@ CENTER="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/downstream.json"
 SYNC="$SCRIPT_DIR/sync-from-upstream.sh"
 LOCK="$SCRIPT_DIR/locks/downstream-check.lock"
-OUT_FILE="/tmp/.factory-downstream-check.$$"
+# 评论 25：可预测 /tmp 路径存在符号链接劫持面（CWE-377）——mktemp 原子创建
+OUT_FILE="$(mktemp "${TMPDIR:-/tmp}/.factory-downstream-check.XXXXXX")"
 
 MODE="check"
 while [ $# -gt 0 ]; do
@@ -52,11 +53,21 @@ for r in rows:
   || { echo "下游清单损坏（需非空 repos[].path）: $MANIFEST" >&2; exit 2; }
 
 mkdir -p "$SCRIPT_DIR/locks"  # 净克隆首跑：gitignored 目录缺失时 shlock ENOENT 被误读为锁被持
+# 评论 16：shlock 缺失时 shell 返回 127、OPID 为空走 else——本脚本会静默
+# exit 0 假成功（巡检永不跑）。环境缺互斥工具 = fail-closed exit 2。
+if ! command -v /usr/bin/shlock >/dev/null 2>&1; then
+  echo "downstream-check: shlock 不可用（macOS 自带工具缺失）——互斥不可靠，fail-closed 退出" >&2
+  exit 2
+fi
 if ! /usr/bin/shlock -f "$LOCK" -p $$; then
   OPID="$(cat "$LOCK" 2>/dev/null || :)"
   if [ -n "$OPID" ] && ! kill -0 "$OPID" 2>/dev/null; then
     rm -f "$LOCK"
     /usr/bin/shlock -f "$LOCK" -p $$ || { echo "巡检锁被持，退出（另一实例运行中）" >&2; exit 0; }
+  elif [ -z "$OPID" ]; then
+    # 锁文件在而 PID 不可读（损坏/权限）——不静默假成功，留人工清理
+    echo "downstream-check: 锁文件 ${LOCK} 存在但 PID 不可读——stale/corrupt，人工清理" >&2
+    exit 2
   else
     echo "巡检锁被持，退出（另一实例运行中）" >&2; exit 0
   fi

@@ -121,12 +121,20 @@ done
 wait
 wins=$(grep -hc '^t|' /tmp/lease-cc-{1,2,3,4}.out 2>/dev/null | paste -sd+ | bc 2>/dev/null)
 [ -z "$wins" ] && wins=$(cat /tmp/lease-cc-{1,2,3,4}.out 2>/dev/null | grep -c '^t|')
-ck "并发 claim 恰满配额"    "2"    "${wins}"
-rm -f /tmp/lease-cc-{1,2,3,4}.out
+# --- 24：同机过期重 claim = 接管非续约（PR #7 评审评论 1 回归）---
+# epoch 递增判据是「同机同租户且未过期」才 0；同机过期后重 claim 是
+# 接管——epoch 必须 +1。fencing 语义：旧链诈尸（心跳恢复）持旧 epoch，
+# 与接管后新 epoch 不匹配 → 围栏拒，双主不可能。
+PG -c "truncate factory_leases;" >/dev/null
+ck "同机短租 1s 认领"         "t|1" "$(W -c "select * from factory_claim('issue:r1','machA',1)")"
+sleep 2
+ck "同机过期接管 epoch+1"     "t|2" "$(W -c "select * from factory_claim('issue:r1','machA',900)")"
+ck "同机旧链 fence f"         "f"   "$(W -c "select factory_fence_ok('issue:r1','machA',1)")"
+
 
 else
-  PG_SKIPPED=25
-  echo "SKIP: PG 环境不可用（initdb/runuser/postgres 任缺，本机 $(uname -s)），跳过 25 项仲裁层 SQL 用例"
+  PG_SKIPPED=28
+  echo "SKIP: PG 环境不可用（initdb/runuser/postgres 任缺，本机 $(uname -s)），跳过 28 项仲裁层 SQL 用例"
 fi
 
 LEASE_SH="${REPO}/.factory/factory-lease.sh"

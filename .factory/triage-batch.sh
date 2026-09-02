@@ -46,13 +46,19 @@ for i in issues:
     if not any(l.startswith("factory:") for l in i["labels"]):
         print(i["number"])' )" || exit 1
 
-COUNT=0
-for ISSUE in $QUEUE; do
-  COUNT=$((COUNT+1)); [ "$COUNT" -gt "$MAX_TRIAGE" ] && { echo "达每轮上限 $MAX_TRIAGE, 余量下轮"; break; }
-  DIR="${FACTORY}/artifacts/issue-${ISSUE}"
+# 单 issue 裁决封装（PR #7 评审评论 11：每 issue 先租约再裁决——此前零
+# 租约裸跑，双实例可同时裁决同一零标签 issue 并写冲突投影，且 issue_label_
+# swap 的 lease_guard 因 LEASE_KEY 未设而放行。claim 失败 = 他机/实例持有
+# 或仲裁不可达，跳过本 issue 下轮再试。租约生命周期与 fix-issue.sh 对齐：
+# claim → heartbeat_loop（失约 TERM）→ 完成/失败路径 lease_cleanup；EXIT
+# trap 兜底放租约防中途致命错误泄漏）
+handle_one() {  # handle_one <issue>
+  local ISSUE="$1"
+  local DIR="${FACTORY}/artifacts/issue-${ISSUE}"
+  local mission title body cmts prompt VERDICT
   mkdir -p "$DIR"
   if ! ${HOST} issue view "${ISSUE}" > "${DIR}/issue.json"; then
-    echo "    issue #${ISSUE} 取回失败（平台失败/网络瞬断），跳过" >&2; continue
+    echo "    issue #${ISSUE} 取回失败（平台失败/网络瞬断），跳过" >&2; return 1
   fi
 
   mission="$(cat "${REPO}/MISSION.md")"
@@ -80,12 +86,23 @@ ${body}
 ${cmts}
 ——评论结束——"
 
+  LEASE_KEY="issue:${ISSUE}"
+  LEASE_EPOCH="$(lease_claim "${LEASE_KEY}")" \
+    || { echo "    [warn] 租约 ${LEASE_KEY} 认领失败（他机/实例持有或仲裁不可达），跳过" >&2; return 1; }
+  lease_heartbeat_loop "${LEASE_KEY}" "${LEASE_EPOCH}"
+  # 心跳失约（被夺/吊销/过期）TERM 或中途致命错误 → EXIT trap 级联放租约
+  # （幂等；函数尾显式 lease_cleanup 后 trap - EXIT 摘除，残留 EXIT 只在
+  # 脚本级 exit 再跑一次，无副作用）
+  trap 'lease_cleanup; trap - EXIT' EXIT
+
   echo "==> triage #${ISSUE}: ${title}"
   if ! omp_node "$REPO" "${DIR}/triage.log" 5m --no-tools -- "$prompt"; then
-    echo "    triage 节点失败（详见 ${DIR}/triage.log）, 跳过" >&2; continue
+    echo "    triage 节点失败（详见 ${DIR}/triage.log）, 跳过" >&2
+    lease_cleanup; trap - EXIT; return 1
   fi
   if ! python3 "${FACTORY}/factory_lib.py" parse "${DIR}/triage.log" "${DIR}/triage.json" accept,reject; then
-    echo "    triage 输出无法解析, 跳过" >&2; continue
+    echo "    triage 输出无法解析, 跳过" >&2
+    lease_cleanup; trap - EXIT; return 1
   fi
   VERDICT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verdict"])' "${DIR}/triage.json")"
   if [ "$VERDICT" = accept ]; then
@@ -99,5 +116,14 @@ ${cmts}
       echo "    [warn] 拒绝落标失败（issue #${ISSUE}），跳过回执" >&2
     fi
   fi
+  lease_cleanup
+  trap - EXIT
+  return 0
+}
+
+COUNT=0
+for ISSUE in $QUEUE; do
+  COUNT=$((COUNT+1)); [ "$COUNT" -gt "$MAX_TRIAGE" ] && { echo "达每轮上限 $MAX_TRIAGE, 余量下轮"; break; }
+  handle_one "$ISSUE" || true
 done
 [ "$COUNT" -eq 0 ] && echo "无待裁决 issue（零 factory 标签）" || true

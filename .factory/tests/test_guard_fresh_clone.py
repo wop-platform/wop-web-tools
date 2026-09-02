@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from gitenv import git_env  # tests/ 兄弟模块，pytest rootdir 注入
+
 GUARD_SRC = Path(__file__).resolve().parent.parent / "guard.py"
 # .localcfg/ 写入 .gitignore 且不创建——模拟 fresh clone 检不出本机配置目录
 PERIMETER = ["MISSION.md", "docs/", ".localcfg/"]
@@ -31,7 +33,9 @@ def _build_repo(tmp_path: Path, perimeter: list) -> Path:
     (root / "MISSION.md").write_text(
         f"# 任务\n\n## 周界（PERIMETER）\n\n{lines}\n", encoding="utf-8")
     (root / ".gitignore").write_text(".localcfg/\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    # 评论 21：密闭环境——conftest 只剥部分变量，宿主导出的
+    # GIT_CEILING_DIRECTORIES 会覆盖 tmp 仓发现结果
+    subprocess.run(["git", "init", "-q", str(root)], check=True, env=git_env())
     return root
 
 

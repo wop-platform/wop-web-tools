@@ -728,11 +728,15 @@ class CodeupAdapter:
             print(f"[hosting] [warn] 字段配置拉取失败,create 可能因模板"
                   f"必填被拒: {e}", file=sys.stderr)
         if label:
-            # 云效 Task 类型常无 labels 字段（ADR-007 实测：PUT 报
-            # "workitem does not contains field"）；等价载体 =
-            # description 尾部 HTML 注释块（富文本完整保留，读取时剥离）
-            payload["description"] = (
-                (body or "") + f"\n\n<!-- factory:labels:v1: {label} -->")
+            # 标签载体与读取/更新同分派（PR #7 评审评论 8，_wi_labels_of /
+            # issue_set_labels 对齐）：native = labels 字段；description =
+            # 尾部 HTML 注释块（云效 Task 常无 labels 字段，ADR-007 实测
+            # PUT 报 does not contains field；富文本完整保留注释）
+            if os.environ.get("CODEUP_ISSUE_LABELS", "native") == "description":
+                payload["description"] = (
+                    (body or "") + f"\n\n<!-- factory:labels:v1: {label} -->")
+            else:
+                payload["labels"] = [label]
         r = self._req("POST",
                       f"/oapi/v1/projex/organizations/{org}/workitems", payload)
         d = r.get("result") if isinstance(r, dict) else r
@@ -968,8 +972,16 @@ class CodeupAdapter:
                       body={"name": name, "color": f"#{color}", "description": desc})
             return True
         except HostingError as e:
-            if "HTTP 4" in str(e):
-                return True  # 已存在/冲突 → ensure 语义达成
+            msg = str(e)
+            # 仅明确「已存在/重复」语义视为 ensure 成功（HTTP 409 = 冲突；
+            # HTTP 400 须文案佐证重复）——401/403/404/5xx 是凭据/路径/服务
+            # 故障，re-raise 暴露（PR #7 评审评论 9：原文 "HTTP 4" 把 404
+            # 端点错也当 ensure 成功静默吞掉，label ensure 假绿）
+            if "HTTP 409" in msg or (
+                    "HTTP 400" in msg
+                    and any(k in msg.lower() for k in (
+                        "exist", "duplicate", "already", "重复", "已存在"))):
+                return True
             raise
 
     def label_history(self, p):

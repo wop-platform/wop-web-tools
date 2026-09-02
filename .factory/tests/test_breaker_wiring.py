@@ -22,7 +22,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from gitenv import git_env  # noqa: E402  (tests/ 兄弟模块，pytest rootdir 注入)
+from gitenv import _sealed_path, git_env  # noqa: E402  (tests/ 兄弟模块，pytest rootdir 注入)
 
 FACTORY = Path(__file__).resolve().parents[1]
 
@@ -80,8 +80,12 @@ def _sandbox(tmp_path: Path, floor: str | None, ledger: str | None) -> Path:
 
 def _run(cmd: list[str], repo: Path, tmp_path: Path, *, with_stubs: bool,
          extra_env: dict | None = None) -> subprocess.CompletedProcess:
-    """with_stubs=True → gh/omp 桩在前；False → 最小 PATH（无 gh，隔离真 CLI）。"""
-    path = f"{tmp_path}/bin:{os.environ['PATH']}" if with_stubs else "/usr/bin:/bin"
+    """with_stubs=True → gh/omp 桩在前；False → 最小 PATH（无 gh，隔离真 CLI）。
+    评论 22：with_stubs 不再拼接宿主 PATH——sync 链的 command -v sourcery
+    可能命中宿主工具并跑真实 CLI（出网）；改 <tmp>/bin:{_sealed_path()}，
+    与 gitenv._sealed_path() 的白名单（python3/git/bash 目录 + POSIX 标准
+    目录）对齐。"""
+    path = f"{tmp_path}/bin:{_sealed_path()}" if with_stubs else "/usr/bin:/bin"
     env = {"PATH": path, "HOME": os.environ.get("HOME", "/tmp"),
            "GH_REPO": "sandbox/repo", "SENTINEL_MARK": str(tmp_path / "sentinel"),
            "STUB_CALLS": str(tmp_path / "calls"),
@@ -111,8 +115,12 @@ class TestBreakerGate:
             (locks / "floor.json").write_text(floor, encoding="utf-8")
         if ledger is not None:
             (locks / "ledger.jsonl").write_text(ledger, encoding="utf-8")
+        # 评论 22：breaker.sh 经 PATH 找 python3——不传 env 则用宿主解释器
+        # （可能带宿主 site-packages/sourcery）。git_env() PATH 白名单锚定
+        # POSIX 标准目录内 python3，密闭子进程链。
         return subprocess.run(["bash", str(FACTORY / "breaker.sh"), str(locks)],
-                              capture_output=True, text=True, timeout=60)
+                              env=git_env(), capture_output=True, text=True,
+                              timeout=60)
 
     def test_daily_cap_trips_exit_3(self, tmp_path):
         r = self._gate(tmp_path, json.dumps({"max_runs_per_day": 1, "max_consecutive_failures": 3}),

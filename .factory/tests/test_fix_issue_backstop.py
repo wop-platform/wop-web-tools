@@ -47,7 +47,10 @@ def _mk_repo(tmp: Path) -> Path:
 def _run_block(wt: Path) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory() as sh_dir:
         sh = Path(sh_dir) / "sandbox.sh"
-        sh.write_text(SANDBOX.replace("__WT__", str(wt)).replace("__PAYLOAD__", _BACKSTOP))
+        # 评论 19：SANDBOX 经 .factory/fix-issue.sh 真实块注入（UTF-8 中文
+        # 注释），write_text 默认编码随平台——显式 UTF-8 与文件内其余调用一致
+        sh.write_text(SANDBOX.replace("__WT__", str(wt)).replace("__PAYLOAD__", _BACKSTOP),
+                      encoding="utf-8")
         return subprocess.run(["/bin/bash", str(sh)], env=git_env(),
                               capture_output=True, text=True)
 

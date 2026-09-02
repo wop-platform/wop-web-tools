@@ -29,13 +29,24 @@ mkdir -p "${REPO}/.factory/locks"  # 净克隆首跑：目录 gitignored 不存�
 }
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 # 抢锁；持锁进程已死则清锁重试一次（防 stale lock 卡死调度）
+# 评论 15：shlock 仅 macOS 自带——命令缺失时 shell 返回 127 且 OPID 为空，
+# 原逻辑走 else exit 0 静默假成功（dispatch 永不跑也无信号）。fail-closed：
+# 环境缺互斥工具 = 环境错误 exit 2（stalled 计连击口径），不静默。
+if ! command -v /usr/bin/shlock >/dev/null 2>&1; then
+  echo "cron-dispatch: shlock 不可用（macOS 自带工具缺失）——互斥不可靠，fail-closed 退出" >&2
+  exit 2
+fi
 if ! /usr/bin/shlock -f "$LOCK" -p $$; then
   OPID=$(cat "$LOCK" 2>/dev/null || :)
   if [ -n "$OPID" ] && ! kill -0 "$OPID" 2>/dev/null; then
     rm -f "$LOCK"
     /usr/bin/shlock -f "$LOCK" -p $$ || exit 0
+  elif [ -z "$OPID" ]; then
+    # 锁文件在而 PID 不可读（损坏/权限）——不可静默假成功，留人工清理
+    echo "cron-dispatch: 锁文件 ${LOCK} 存在但 PID 不可读——stale/corrupt，人工清理" >&2
+    exit 2
   else
-    exit 0
+    exit 0   # 持锁进程存活 = 另一轮在跑，正常跳过
   fi
 fi
 trap 'rm -f "$LOCK"' EXIT INT TERM
@@ -73,7 +84,7 @@ trap 'rm -f "$LOCK"' EXIT INT TERM
       # 聚合层（dispatch-all.sh）注入 ALERT_CMD/ALERT_OPEN_ID/ALERT_SENT_DIR 时
       # 立即推送；指纹与聚合层共享（alerts/sent/<repo>.stalled），30min tick
       # 不重复推，恢复后由聚合层 clear_alerts 清除。
-      if [ -n "${ALERT_CMD:-}" ] && [ -n "${ALERT_OPEN_ID:-}" ] && [ -x "$ALERT_CMD" ]; then
+      if [ -n "${ALERT_CMD:-}" ] && [ -n "${ALERT_OPEN_ID:-}" ] && [ -r "$ALERT_CMD" ]; then
         fp="${ALERT_SENT_DIR:+${ALERT_SENT_DIR}/${REPO##*/}.stalled}"
         if [ -z "$fp" ] || [ ! -f "$fp" ]; then
           if python3 "$ALERT_CMD" "$ALERT_OPEN_ID" "[factory] ${REPO##*/} dispatch 停摆（exit=2 连击 ${n} 轮）——无法自愈需人工介入；环境自检见 ${STALLED_MARK}" >/dev/null 2>&1; then

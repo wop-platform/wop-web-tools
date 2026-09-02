@@ -190,20 +190,22 @@ ART_PATH="$(sed -n 's/^ARTIFACT: //p' "$FB_DIR/adapt.log" | tail -1)"
 # --- 6. 确定性验证（不信任节点自觉）：产物 / 提交数 / 周界 / 干净树 ---
 # omp --no-session 偶发非零退出码但工作完成（2026-08-22 实测），退出码只降级为警告；
 # 真正的验收是 ARTIFACT 存在 + 以下确定性检查 + 第 7 节上游门禁
+# 评论 19：abandon 先 exit 1——失败原因须先输出（die 随其后永不达，
+# shellcheck SC2317）。四处同式：原因 → abandon。
 if [ -z "$ART_PATH" ] || [ ! -f "$ART_PATH" ]; then
+  printf '✗ %s\n' "适配节点未产出 ARTIFACT（日志: ${FB_DIR}/adapt.log）" >&2
   abandon
-  die "适配节点未产出 ARTIFACT（日志: ${FB_DIR}/adapt.log）"
 fi
 [ "$NODE_RC" = 0 ] || say "⚠ 适配节点退出码 ${NODE_RC}（工作已完成，以下确定性检查为准）"
 N_COMMITS="$("${GITW[@]}" rev-list --count "$BASE..HEAD")"
 if [ "$N_COMMITS" != "$N_TOTAL" ]; then
+  printf '✗ %s\n' "提交数 ${N_COMMITS} ≠ 候选数 ${N_TOTAL}（一候选一提交契约破坏）" >&2
   abandon
-  die "提交数 ${N_COMMITS} ≠ 候选数 ${N_TOTAL}（一候选一提交契约破坏）"
 fi
 BAD_FILES="$("${GITW[@]}" diff --name-only "$BASE..HEAD" | grep -v '^\.factory/' || true)"
 if [ -n "$BAD_FILES" ]; then
+  printf '✗ %s\n' "越界改动（仅允许 .factory/）: $(echo "$BAD_FILES" | tr '\n' ' ')" >&2
   abandon
-  die "越界改动（仅允许 .factory/）: $(echo "$BAD_FILES" | tr '\n' ' ')"
 fi
 [ -z "$("${GITW[@]}" status --porcelain)" ] || die "上游 worktree 残留未提交改动（adapt.md 说明见 ${FB_DIR}）"
 say "✓ 适配完成: ${N_COMMITS} commits，全部位于 .factory/"
@@ -230,8 +232,8 @@ if (cd "$WT" && sh tools/gauntlet.sh) \
     > "$FB_DIR/gate.log" 2>&1; then
   say "✓ 上游门禁绿（$FB_DIR/gate.log）"
 else
+  printf '✗ %s\n' "上游门禁红，未开 PR（报告: $FB_DIR/gate.log）" >&2
   abandon
-  die "上游门禁红，未开 PR（报告: $FB_DIR/gate.log）"
 fi
 
 
@@ -246,6 +248,8 @@ fi
 PR_BODY="$FB_DIR/pr-body.md"
 { echo "自 ${SELF_ID} 反哺工厂改进（一候选一提交，clean pick 保真 / conflicted 适配）。"
   echo
+  # 评论 18：PR 正文围栏配对——候选清单需先开启代码块再闭合
+  echo '```'
   printf '%s\n' "$PENDING" | while IFS=$'\t' read -r sha subject; do
     echo "${sha:0:9}  $subject"
   done

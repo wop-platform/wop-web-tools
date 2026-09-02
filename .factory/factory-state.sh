@@ -33,16 +33,16 @@ for a in "$@"; do
 done
 [ -n "$TARGET" ] || { echo "用法: $0 sync <N|--all> [--plan]" >&2; exit 2; }
 
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-
 find_pr_for_issue() {  # <issue-number> → PR number（空=无）
   # 链约定：PR body 含 'Closes #N'（中立 body 由 hosting 归一，两端一致）
+  # 编号保字符串、字面串匹配（PR #7 评审评论 7）：支持 KFPT-18 式标识符，
+  # (?![\w-]) 边界防 #KFPT-1 误配 #KFPT-18
   ${HOST} pr list --state open --limit 100 \
     | python3 -c '
 import json, re, sys
-n = int(sys.argv[1])
+n = re.escape(sys.argv[1])
 for pr in json.load(sys.stdin):
-    if re.search(r"[Cc]loses #%d\b" % n, pr.get("body") or ""):
+    if re.search(r"[Cc]loses #%s(?![\w-])" % n, pr.get("body") or ""):
         print(pr["number"]); break
 ' "$1"
 }
@@ -88,21 +88,23 @@ for o in json.load(sys.stdin)["ops"]:
 }
 
 if [ "$TARGET" = "--all" ]; then
+  # issue list（factory:* 标签）∪ open PR body 的 Closes 引用（hosting 归
+  # 一）：引用保留字面标识符（PR #7 评审评论 7，支持 KFPT-18 式）去重。
+  # 零标签 issue 也会被 open PR 关联（链中途死亡 → trap 清标签但 PR 已建），
+  # 并入 Closes 引用后 --all 才能收敛完整
   { ${HOST} issue list --state all --limit 200 \
       | python3 -c '
 import json, sys
 for i in json.load(sys.stdin):
     if any(l.startswith("factory:") for l in i["labels"]):
         print(i["number"])'
-    # 零标签 issue 也会被 open PR 关联（链中途死亡 → trap 清标签但 PR 已建），
-    # 并入 open PR body 的 Closes 引用（hosting 归一），--all 才能收敛完整
     ${HOST} pr list --state open --limit 100 \
       | python3 -c '
 import json, re, sys
 for pr in json.load(sys.stdin):
-    for m in re.finditer(r"[Cc]loses #(\d+)\b", pr.get("body") or ""):
+    for m in re.finditer(r"[Cc]loses #([\w-]+)", pr.get("body") or ""):
         print(m.group(1))'; } \
-    | sort -un | while read -r N; do sync_one "$N"; done
+    | sort -u | while read -r N; do sync_one "$N"; done
 else
   sync_one "$TARGET"
 fi

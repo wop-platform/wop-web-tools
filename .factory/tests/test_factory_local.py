@@ -53,16 +53,16 @@ class TestGuardLoadsPerimeterFromConfig:
 
 
 class TestRejectGuidanceFromConfig:
-    """factory_lib.REJECT_GUIDANCE 来自 factory-local.json（M4）。"""
+    """factory_lib.reject_guidance() 来自 factory-local.json（M4，按需装载）。"""
 
     def test_guidance_keys_loaded(self):
-        assert set(factory_lib.REJECT_GUIDANCE) == {"a", "b", "c"}
-        assert all(len(v) > 20 for v in factory_lib.REJECT_GUIDANCE.values())
+        assert set(factory_lib.reject_guidance()) == {"a", "b", "c"}
+        assert all(len(v) > 20 for v in factory_lib.reject_guidance().values())
 
     def test_receipt_uses_config_guidance(self):
         md = factory_lib.reject_receipt({"verdict": "reject",
                                          "reasons": ["判据a: 不通过"]})
-        assert factory_lib.REJECT_GUIDANCE["a"] in md
+        assert factory_lib.reject_guidance()["a"] in md
 
 
 class TestEvidenceSuitesDualLayout:

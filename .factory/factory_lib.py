@@ -241,7 +241,12 @@ def _load_reject_guidance() -> dict[str, str]:
         raise RuntimeError(f"factory-local.json reject_guidance 不可用: {exc}") from exc
 
 
-REJECT_GUIDANCE: dict[str, str] = _load_reject_guidance()
+def reject_guidance() -> dict[str, str]:
+    """重投指引（按需装载，PR #7 评审评论 2）：模块 import 不读配置——
+    无 factory-local.json 的路径（skip 面工具、测试夹具仓库）不再被
+    import 即炸；首次渲染回执时才 fail-closed（issue_reject 链侧对
+    receipt 失败仅告警，回执是透明度而非门）。"""
+    return _load_reject_guidance()
 
 
 def final_gate_cmd() -> str:
@@ -442,7 +447,7 @@ def reject_receipt(triage: dict) -> str:
         if m and ("不通过" in r or "存疑" in r):
             failed.add(m[1])
     lines += ["", "**重投指引**：不同意裁决可补充上下文后重开，下一轮 triage 全新评估。针对未通过判据："]
-    lines += [f"- {REJECT_GUIDANCE[k]}" for k in sorted(failed)] or [
+    lines += [f"- {reject_guidance()[k]}" for k in sorted(failed)] or [
         "- 对照 MISSION.md「Triage 判据」逐条补足 issue 上下文。"
     ]
 
@@ -563,6 +568,14 @@ def _pid_alive(pid: int) -> bool:
         return False  # 垃圾 pid：kill -0 报错，bash 语义按死处理
 
 
+def _lock_pid(lock_dir: Path) -> str:
+    """读锁 pid 原始内容；文件缺失 → ""。空串/坏值 = 无法判定持有者。"""
+    try:
+        return (lock_dir / "pid").read_text(encoding="ascii").strip()
+    except OSError:
+        return ""
+
+
 def acquire_dispatch_lock(lock_dir: Path, pid: int) -> bool:
     """双实例硬锁：mkdir 原子占锁 + PID 活性检测（macOS 无 flock(1)）。
 
@@ -570,41 +583,66 @@ def acquire_dispatch_lock(lock_dir: Path, pid: int) -> bool:
     隔离后各树 locks/ 互不可见，锁随树走会绕开互斥）；父目录预建——父缺
     ENOENT 会被误读为「另一 dispatcher 运行中」（源仓 PR#79）。
     cron 重叠是常态：忙时返回 False，调用方 exit 0。
+    陈锁接管（PR #7 评审评论 3）：rmtree+mkdir 无独占判代——并发接管者
+    级联 rm 掉对方刚建的新锁再各自 mkdir → 双主。改墓碑协议：rename 移
+    走陈锁 = 原子独占判代（并发接管唯一赢家）→ 墓碑上二次确认 pid（读
+    死 pid 与 rename 之间可能被活持有者换新，误伤即放回退让）确死才弃。
     """
     lock_dir.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        lock_dir.mkdir()
-    except FileExistsError:
-        old = ""
+    for _ in range(2):
         try:
-            old = (lock_dir / "pid").read_text(encoding="ascii").strip()
-        except (OSError, ValueError):
-            pass
-        alive = False
-        if old:
-            try:
-                alive = _pid_alive(int(old))
-            except ValueError:
-                alive = False
-        if old and not alive:
-            print(f"锁持有者 pid={old} 已死，接管陈锁", file=sys.stderr)
-            shutil.rmtree(lock_dir, ignore_errors=True)
-            try:
-                lock_dir.mkdir()
-            except FileExistsError:
-                print("另一 dispatcher 运行中，退出", file=sys.stderr)
+            lock_dir.mkdir()
+            (lock_dir / "pid").write_text(str(pid), encoding="ascii")
+            return True
+        except FileExistsError:
+            old = _lock_pid(lock_dir)
+            if old:
+                try:
+                    alive = _pid_alive(int(old))
+                except ValueError:
+                    alive = False
+                if alive:
+                    print(f"另一 dispatcher 运行中（pid={old}），退出", file=sys.stderr)
+                    return False
+            else:
+                # pid 缺失/空 = 无法判定持有者死活，按忙退出（bash 同参）
+                print("另一 dispatcher 运行中（pid 不可判），退出", file=sys.stderr)
                 return False
-        else:
-            print(f"另一 dispatcher 运行中（pid={old}），退出", file=sys.stderr)
-            return False
-    (lock_dir / "pid").write_text(str(pid), encoding="ascii")
-    return True
+            # 陈锁（pid 死/坏）：墓碑化独占判代
+            tomb = lock_dir.with_name(f"{lock_dir.name}.dead.{pid}")
+            try:
+                os.rename(lock_dir, tomb)
+            except FileNotFoundError:
+                print("另一 dispatcher 正在接管陈锁，退出", file=sys.stderr)
+                return False
+            owner = _lock_pid(tomb)
+            if owner:
+                try:
+                    alive = _pid_alive(int(owner))
+                except ValueError:
+                    alive = False
+                if alive:
+                    # 墓碑里是活 pid：rename 前刚被活持有者重建（陈旧误判）——
+                    # 原位移回退让（位被占则弃残本，绝不毁他人活锁）
+                    print(f"锁已被活持有者接管（pid={owner}），退出", file=sys.stderr)
+                    try:
+                        os.rename(tomb, lock_dir)
+                    except FileNotFoundError:
+                        shutil.rmtree(tomb, ignore_errors=True)
+                    return False
+            print(f"锁持有者 pid={old} 已死，接管陈锁", file=sys.stderr)
+            shutil.rmtree(tomb, ignore_errors=True)
+    return False  # 理论不可达：两轮 mkdir 必有定论（守卫）
 
 
 def release_dispatch_lock(lock_dir: Path) -> None:
-    """放锁（幂等）。bash EXIT trap 的对应物；TERM/HUP 处理器转 SystemExit
+    """放锁（幂等）：只删仍属自己的锁（PR #7 评审评论 4）——pid 内容非
+    本人 = 锁已被接管/损坏/外部变更，rmtree ignore_errors 级联会误删接管
+    者刚建的新锁（持有者 finally 与接管竞态）；空/坏 pid 无法证明属己，
+    同样不动。bash EXIT trap 的对应物；TERM/HUP 处理器转 SystemExit
     保证 finally 路径执行。"""
-    shutil.rmtree(lock_dir, ignore_errors=True)
+    if _lock_pid(lock_dir) == str(os.getpid()):
+        shutil.rmtree(lock_dir, ignore_errors=True)
 
 
 # （slug 解析已迁 hosting.py——平台选择逻辑归抽象层，ADR-008）
@@ -841,7 +879,8 @@ def dispatch_round(cfg: _DispatchCfg) -> int:
     _drain_accepted_queue(cfg)
     _final_sync(cfg)
     _reconcile_rejected(cfg)
-    return _upstream_sync_check(cfg)
+    _upstream_sync_check(cfg)  # 纯检查（副作用：输出诊断），rc 不透传——本轮
+    return 0                   # 唯一非零返回 = 熔断/门故障（PR #7 评审评论 23）
 
 
 def _parse_dispatch_args(args: list[str]) -> tuple[bool, float, bool]:

@@ -565,11 +565,11 @@ class TestCodeupIssueCreate:
         assert body["spaceId"] == "sp1" and body["workitemTypeId"] == "wt9"
         assert body["subject"] == "标题"
         assert body["assignedTo"] == "0123456789abcdef01234567"
-        # label 载体 = description 尾部 HTML 注释块（云效 Task 常无 labels
-        # 字段，ADR-007 实测；PR #64 审查 F1 修复）
-        assert body["description"].startswith("正文")
-        assert "<!-- factory:labels:v1: factory:triaging -->" in body["description"]
-        assert "labels" not in body  # 不再直写 labels 字段（真实平台 400）
+        # label 载体与读取/更新同分派（PR #7 评审评论 8）：默认 native =
+        # labels 字段（_wi_labels_of / issue_set_labels 同参，不再无条件
+        # 写 description 注释块——创建后按原生载体可读回）
+        assert body["labels"] == ["factory:triaging"]
+        assert "factory:labels:v1" not in (body.get("description") or "")
         cfvs = body["customFieldValues"]
         # 平面对象 {"fieldId": "value"}（数组形态 = Invalid format 实测）
         assert isinstance(cfvs, dict)
@@ -579,6 +579,18 @@ class TestCodeupIssueCreate:
         assert 1 not in cfvs and "1" not in cfvs  # NativeField 走本体
         assert 7 not in cfvs and "7" not in cfvs  # 非 required 不带
         assert out == {"number": "KFPT-42", "url": "https://x/KFPT-42"}
+
+    def test_create_label_description_carrier(self, monkeypatch):
+        # CODEUP_ISSUE_LABELS=description → 尾部 HTML 注释块（Task 常无
+        # labels 字段类型，ADR-007 实测；PR #7 评审评论 8 description 侧）
+        monkeypatch.setenv("CODEUP_ISSUE_LABELS", "description")
+        ad, calls = self._ad(monkeypatch)
+        ad.issue_create("标题", "正文", label="factory:triaging")
+        posts = [c for c in calls if c[0] == "POST" and c[1].endswith("/workitems")]
+        body = posts[-1][2]
+        assert "labels" not in body
+        assert body["description"].startswith("正文")
+        assert "<!-- factory:labels:v1: factory:triaging -->" in body["description"]
 
     def test_fields_fetch_failure_degrades_with_warning(self, monkeypatch, capsys):
         ad, calls = self._ad(monkeypatch, fail_fields=True)
@@ -642,24 +654,40 @@ class TestCodeupEndpointFallback:
 class TestCli:
     def test_codeup_issue_view_cli_fails_closed(self, tmp_path):
         """#67 后 issue view 已实装：CLI 边界=无凭据/网络失败 fail-closed
-        非零（假 token → 401 → HostingError），不再是无条件 unsupported。"""
+        非零（假 token → 401 → HostingError），不再是无条件 unsupported。
+        评论 26：密封——原用例真出网访问云效端点（耗时随网络、违本仓
+        「全程无出网」面）。PYTHONPATH 注入 sitecustomize 使 urlopen
+        立即 URLError（→ HostingError fail-closed），断言语义不变。"""
+        seal = tmp_path / "seal"
+        seal.mkdir()
+        (seal / "sitecustomize.py").write_text(
+            "import urllib.error\n"
+            "import urllib.request\n"
+            "def _sealed(req, timeout=None):\n"
+            "    raise urllib.error.URLError('test: network sealed')\n"
+            "urllib.request.urlopen = _sealed\n",
+            encoding="utf-8")
         r = subprocess.run(
             [sys.executable, str(Path(hosting.__file__).resolve()),
              "issue", "view", "1"],
             capture_output=True, text=True,
             env={"FACTORY_HOSTING": "codeup", "PATH": "/usr/bin:/bin",
+                 "PYTHONPATH": str(seal),
                  "YUNXIAO_ACCESS_TOKEN": "t", "CODEUP_ORG_ID": "o",
                  "CODEUP_REPO_ID": "1"})
-        assert r.returncode != 0          # 401 fail-closed（无真凭据环境）
+        assert r.returncode != 0          # 401 fail-closed（密封同形态）
         assert "hosting" in r.stderr or "codeup" in r.stderr
 
     def test_platform_select_unknown(self):
+        # 评论 27：还原用原值——环境本就 FACTORY_HOSTING=codeup 时硬编码
+        # "github" 会把全局永久改掉，后续用例平台选择漂移
+        prev = hosting.FACTORY_HOSTING
         with pytest.raises(hosting.HostingError) as e:
             hosting.FACTORY_HOSTING = "gitlab"
             try:
                 hosting.current_adapter()
             finally:
-                hosting.FACTORY_HOSTING = "github"
+                hosting.FACTORY_HOSTING = prev
         assert e.value.code == 2
 
     def test_platform_select_unknown_cli_exit2(self, monkeypatch):

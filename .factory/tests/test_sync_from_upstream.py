@@ -362,6 +362,47 @@ class TestSelfOverwriteSafety:
         assert lock["anchor"], "锚点照常写入（半同步态防线）"
         assert not list((dn / ".factory").glob("*.factory-new.*")), "无 tmp 中转残留"
 
+class TestUrlMaterialization:
+    """PR #7 评论 20：URL 入参物化为临时裸克隆——锁内 upstream 字段写原始
+    URL（机器路径/物化目录绝不入锁）。file:// 协议由 git clone --bare 原生
+    支持，零网络驱动真物化路径；TMPDIR 注入 tmp_path 使物化目录可断言清理。"""
+
+    def test_file_url_syncs_and_locks_original_url(self, repos, tmp_path):
+        up, dn, anchor = repos
+        url = up.as_uri()  # file:///…/up
+        env = _run_env()
+        env["TMPDIR"] = str(tmp_path)  # 物化目录与 mktemp 面全部落 tmp_path
+        proc = subprocess.run(
+            ["bash", str(dn / ".factory/sync-from-upstream.sh"),
+             url, "--apply", "--anchor", "main"],
+            cwd=dn, env=env, capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert (dn / ".factory/tests/conftest.py").read_text(encoding="utf-8") \
+            == "# upstream canonical\n", "URL 物化后同步产物落位"
+        assert "file://" in proc.stdout, "摘要引用原始 URL"
+        lock = json.loads((dn / ".factory/upstream-lock.json").read_text(encoding="utf-8"))
+        assert lock["anchor"] == anchor
+        assert lock["upstream"] == url, "锁写原始 URL——物化临时路径绝不入锁"
+        assert not list(tmp_path.glob("factory-upstream.*")), \
+            "EXIT trap 清理物化裸克隆目录"
+
+    def test_unreachable_url_fails_closed_rc2(self, repos, tmp_path):
+        """URL 克隆失败 = 上游不可用：exit 2 契约（fail-closed 不落半态）。"""
+        up, dn, _ = repos
+        env = _run_env()
+        env["TMPDIR"] = str(tmp_path)
+        proc = subprocess.run(
+            ["bash", str(dn / ".factory/sync-from-upstream.sh"),
+             "https://127.0.0.1:1/nope.git", "--check", "--anchor", "main"],
+            cwd=dn, env=env, capture_output=True, text=True, timeout=60,
+        )
+        assert proc.returncode == 2
+        assert "克隆失败" in proc.stderr
+        assert not list(tmp_path.glob("factory-upstream.*")), \
+            "克隆失败清理物化目录（rm -rf 分支）"
+
+
 class TestPR106ReviewRegressions:
     """PR #106 审查评论回归：--repo 子目录规范化到仓根 / 旧锁 upstream 回填。"""
 
