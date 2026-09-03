@@ -32,4 +32,6 @@
   "upstream_repo": "im47cn/awesome-rules",
   "upstream_path": "~/sources/awesome-rules",
   "feedback_branch_prefix": "feedback/wop-web-tools"
+,
+  "port_point": "059727e5cebec82f37a8ce79c6f0e1da1358e9f3"
 }

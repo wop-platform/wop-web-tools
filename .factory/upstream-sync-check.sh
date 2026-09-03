@@ -53,14 +53,24 @@ if ! ${HOST} auth ok >/dev/null 2>&1; then
   exit 3
 fi
 
-# 漂移检查：--check exit 1 = full 面有漂移；local 面仅报告（stdout 摘要）
-CHECK_OUT="$(bash "$FACTORY/sync-from-upstream.sh" "$UP" --check 2>&1)" && {
-  echo "$CHECK_OUT" | grep -q 'local.*人工\|漂移' || true
+# 漂移检查：--check 退出码是权威判据（评论 12/28——原依赖上游 stdout 文案
+# grep 二次判定 full 分支，上游文案变动会 fail-open exit 0 吞掉漂移；L58
+# 无效 grep 结果不参与控制流，一并删除）。rc：0=full 干净；1=full 漂移；
+# 其它=异常 fail-closed exit 1（漂移既不追平也不上报 = 最坏形态）
+CHECK_OUT="$(bash "$FACTORY/sync-from-upstream.sh" "$UP" --check 2>&1)" && RC=0 || RC=$?
+echo "$CHECK_OUT"
+if [ "$RC" -eq 0 ]; then
+  # full 面干净（local 面漂移仅摘要可见）；rc=0 = 同步已推进语义不变
   echo "upstream-sync: full 面干净，无动作"
   exit 0
+fi
+[ "$RC" -eq 1 ] || {
+  echo "upstream-sync: sync-from-upstream --check 异常退出（rc=$RC），fail-closed" >&2
+  exit 1
 }
 
-echo "$CHECK_OUT"
+# rc=1 = full 面漂移确定（权威信号，不再依赖文案匹配）；grep 仅用于区分
+# local/full 摘要
 # local 漂移落 needs-human issue（零 LLM 分诊：语义决策归人类）
 if echo "$CHECK_OUT" | grep -q '\[local\].*差'; then
   LOCAL_SUMMARY="$(echo "$CHECK_OUT" | grep '\[local\].*差' | head -20)"
@@ -70,7 +80,11 @@ if echo "$CHECK_OUT" | grep -q '\[local\].*差'; then
 
 正道：对上游修通用缺陷 → feedback-upstream.sh 反哺 PR → 上游合并 → 本仓 --apply 追平。
 
-${LOCAL_SUMMARY}" \
+${LOCAL_SUMMARY}
+
+## 验收（可机械判定）
+
+- [ ] \`bash .factory/sync-from-upstream.sh ${UP} --check\` 不再报 [local] 分叉，或本 issue 下留有人工合并决策评论" \
       && echo "upstream-sync: local 漂移已落 needs-human issue" \
       || echo "upstream-sync: issue 创建失败（继续 full 面处理）" >&2
   else
@@ -78,41 +92,37 @@ ${LOCAL_SUMMARY}" \
   fi
 fi
 
-# full 漂移 → 确定性 PR 流
-if echo "$CHECK_OUT" | grep -q '\[full\].*漂移\|\[full\].*缺失'; then
-  if [ "$DRY" = 1 ]; then
-    echo "[dry-run] full 漂移存在，将走确定性 PR 流（apply → gauntlet → PR）"
-    exit 1
-  fi
-  bash "$FACTORY/sync-from-upstream.sh" "$UP" --apply
-  echo "-- gauntlet（同步后全量门禁）--"
-  if ! bash tools/gauntlet.sh; then
-    echo "upstream-sync: gauntlet 红门——不 push，漂移保留人工介入（fail-closed）" >&2
-    exit 1
-  fi
-  ANCHOR="$(python3 -c '
+# rc=1 = full 面漂移确定（评论 12：退出码权威判据，不再 grep stdout 文案；
+# 文案匹配失败曾致 full 漂移静默落 exit 0）
+if [ "$DRY" = 1 ]; then
+  echo "[dry-run] full 漂移存在，将走确定性 PR 流（apply → gauntlet → PR）"
+  exit 1
+fi
+bash "$FACTORY/sync-from-upstream.sh" "$UP" --apply
+echo "-- gauntlet（同步后全量门禁）--"
+if ! bash "$REPO/tools/gauntlet.sh"; then  # 评论 15：绝对路径——相对路径依赖 cwd
+  echo "upstream-sync: gauntlet 红门——不 push，漂移保留人工介入（fail-closed）" >&2
+  exit 1
+fi
+ANCHOR="$(python3 -c '
 import json, sys
 print(json.loads(open(sys.argv[1]).read())["anchor"][:9])' "$LOCK")"
-  BR="factory/sync-${ANCHOR}"
-  git add .factory
-  if git diff --cached --quiet; then
-    echo "upstream-sync: apply 后无待提交变更（内容已等价）"
-    exit 0
-  fi
-  git commit -qm "chore(factory): 上游同步追平 ${ANCHOR}（M2 确定性 PR 流）"
-  git push -q --no-verify origin "HEAD:refs/heads/${BR}"
-  PR_URL="$(${HOST} pr create --head "$BR" --title "factory: 上游同步追平（${ANCHOR}）" \
-    --label factory:needs-review \
-    --body "M2 确定性 PR 流（设计 §11.2）：full 面漂移自动追平，机器执行、人工合并。
+BR="factory/sync-${ANCHOR}"
+# 评论 15：git 命令一律 -C "$REPO"（cron/任意目录调用不得依赖 cwd）
+git -C "$REPO" add .factory
+if git -C "$REPO" diff --cached --quiet; then
+  echo "upstream-sync: apply 后无待提交变更（内容已等价）"
+  exit 0
+fi
+git -C "$REPO" commit -qm "chore(factory): 上游同步追平 ${ANCHOR}（M2 确定性 PR 流）"
+git -C "$REPO" push -q --no-verify origin "HEAD:refs/heads/${BR}"
+PR_URL="$(${HOST} pr create --head "$BR" --title "factory: 上游同步追平（${ANCHOR}）" \
+  --label factory:needs-review \
+  --body "M2 确定性 PR 流（设计 §11.2）：full 面漂移自动追平，机器执行、人工合并。
 
 - 锚点: \`${ANCHOR}\`
 - gauntlet 全量门禁已过（fail-closed：红门不 push）
 - 同锚点重跑幂等（push 同分支，PR 自动更新）" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("url") or "")')" \
-    || PR_URL="(PR 已存在或创建失败——分支 ${BR} 已推送，可手工开 PR)"
-  echo "upstream-sync: 同步 PR ${PR_URL}（人工合并）"
-  exit 0
-fi
-
-# 只有 local 漂移（无 full）：不建同步分支
-echo "upstream-sync: 仅 local 面漂移——已落 issue，无 full 动作"
+  || PR_URL="(PR 已存在或创建失败——分支 ${BR} 已推送，可手工开 PR)"
+echo "upstream-sync: 同步 PR ${PR_URL}（人工合并）"
 exit 0

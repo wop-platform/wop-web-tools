@@ -33,7 +33,7 @@ def _load_port_point():
     try:
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
-        raise RuntimeError("factory-local.json 不可读: %s" % e)
+        raise RuntimeError(f"factory-local.json 不可读: {e}") from e
     pp = cfg.get("port_point")
     if not isinstance(pp, str) or not pp.strip():
         raise RuntimeError(
@@ -451,11 +451,20 @@ def _usage_exit():
 
 
 def main():
+    """评论 24：子命令校验/分派先于 git 采集——record 与未知子命令不得触发
+    _gather_commits/_build_pending（后者 check=True：PORT_POINT 不可达或非
+    git 仓时 _usage_exit 的契约退出码 2 被 CalledProcessError 顶掉）。"""
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     here = pathlib.Path(__file__).parent
     ledger_path = here / "feedback-log.jsonl"
-    commits = _gather_commits()
-    commits, ledger, pending = _build_pending(commits, ledger_path)
+    if cmd not in ("pending", "superseded", "closure", "adapt-prep",
+                   "status", "report", "record"):
+        _usage_exit()
+    if cmd == "record":
+        _cmd_record(sys.argv[2], sys.argv[3:], ledger_path)
+        return
+
+    commits, ledger, pending = _build_pending(_gather_commits(), ledger_path)
 
     if cmd == "pending":
         _cmd_pending(pending)
@@ -469,10 +478,6 @@ def main():
         print(status_line(len(pending)))
     elif cmd == "report":
         _cmd_report(sys.argv[2], pending, here)
-    elif cmd == "record":
-        _cmd_record(sys.argv[2], sys.argv[3:], ledger_path)
-    else:
-        _usage_exit()
 
 
 if __name__ == "__main__":

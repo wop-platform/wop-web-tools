@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mutations"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from gitenv import git_env  # noqa: E402  (tests/ 兄弟模块，pytest rootdir 注入)
+from gitenv import _sealed_path, git_env  # noqa: E402  (tests/ 兄弟模块，pytest rootdir 注入)
 
 import run as mut  # noqa: E402
 import guard  # noqa: E402
@@ -53,16 +53,16 @@ class TestGuardLoadsPerimeterFromConfig:
 
 
 class TestRejectGuidanceFromConfig:
-    """factory_lib.REJECT_GUIDANCE 来自 factory-local.json（M4）。"""
+    """factory_lib.reject_guidance() 来自 factory-local.json（M4，按需装载）。"""
 
     def test_guidance_keys_loaded(self):
-        assert set(factory_lib.REJECT_GUIDANCE) == {"a", "b", "c"}
-        assert all(len(v) > 20 for v in factory_lib.REJECT_GUIDANCE.values())
+        assert set(factory_lib.reject_guidance()) == {"a", "b", "c"}
+        assert all(len(v) > 20 for v in factory_lib.reject_guidance().values())
 
     def test_receipt_uses_config_guidance(self):
         md = factory_lib.reject_receipt({"verdict": "reject",
                                          "reasons": ["判据a: 不通过"]})
-        assert factory_lib.REJECT_GUIDANCE["a"] in md
+        assert factory_lib.reject_guidance()["a"] in md
 
 
 class TestEvidenceSuitesDualLayout:
@@ -207,7 +207,12 @@ class TestGitEnvSealing:
         self._init_repo(victim)
         self._init_repo(fixture)
         (fixture / "factory-local.json").write_text("{}", encoding="utf-8")
-        leaked = {**os.environ, "GIT_DIR": str(victim / ".git")}
+        # 密闭面基线（#109：PATH 白名单 + GIT_CONFIG /dev/null）之上
+        # 注入泄漏变量——复现维度仅 GIT_DIR 劫持。裸 os.environ 会把
+        # 宿主 gpgsign 带进来：无 homebrew PATH 形态下 gpg 不可见 →
+        # commit rc=128 假红（#109 陷阱②在负例上的投影）
+        leaked = git_env()
+        leaked["GIT_DIR"] = str(victim / ".git")
         subprocess.run(["git", "-C", str(fixture), "add", "-A"],
                        check=True, env=leaked, capture_output=True)
         subprocess.run(["git", "-C", str(fixture), "commit", "-qm", "x"],
@@ -241,4 +246,6 @@ class TestGitEnvSealing:
         env = git_env({"GIT_DIR": "/x", "GIT_WORK_TREE": "/y",
                        "PATH": "/bin", "HOME": "/u"})
         assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
-        assert env["PATH"] == "/bin" and env["HOME"] == "/u"
+        # issue #109：PATH 纳入密闭面——base 传入值被白名单覆盖（密闭面
+        # 不可被调用方松开）；其余变量（HOME）仍透传
+        assert env["PATH"] == _sealed_path() and env["HOME"] == "/u"

@@ -17,7 +17,11 @@ if [ -z "${PR}" ]; then
   echo "用法: $0 <pr-number> [--dry-run]" >&2; exit 2
 fi
 
+# 加载共享库（omp_node/node 预算等定义于此；评论 13：此前 validate-pr 未
+# source，非 dry-run 的 omp_node 调用 command not found 触发 fail）。
+# 约定同 fix-issue.sh：REPO 解析后 source，函数体内才求值 ISSUE 等状态变量。
 REPO="$(git rev-parse --show-toplevel)"
+source "${REPO}/.factory/factory-lib.sh"
 DIR="${REPO}/.factory/artifacts/pr-${PR}"
 node_timeout() { python3 "${REPO}/.factory/factory_lib.py" timeout "$1"; }  # 分级预算：评审15m/holdout 5m
 HOST="python3 ${REPO}/.factory/hosting.py"

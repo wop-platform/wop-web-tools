@@ -97,7 +97,9 @@ begin
   update factory_leases as l
      set tenant = v_tenant,
          machine_id = p_machine,
-         epoch = l.epoch + (case when l.machine_id = p_machine then 0 else 1 end),
+         epoch = l.epoch + (case when l.machine_id = p_machine
+                                  and l.tenant = v_tenant
+                                  and l.expires_at > now() then 0 else 1 end),
          heartbeat_at = now(),
          expires_at = now() + make_interval(secs => p_secs)
    where l.key = p_key
