@@ -4,16 +4,17 @@
 // 页内断言只保壳级（DOM 无跨源 URL）；源码级网络/存储禁词由本层拦截（pre-commit + CI）。
 //
 // 反向核对矩阵（条款 → 断言；否定式条款均有对应断言）:
-//   SCAN-1  spec:S1 跨源资源 URL 为零   | src/href 不得指向 http(s):// 或协议相对 //（同源相对路径放行）
+//   SCAN-1  spec:S1 跨源资源 URL 为零   | src/href 不得指向 http(s):// 或协议相对 //；CSS url() 跨源同禁（同源相对路径放行）
 //   SCAN-2  spec:S1 网络 API 禁词为零   | fetch(/XMLHttpRequest/WebSocket/EventSource/sendBeacon 源码为零
 //   SCAN-3  spec:S2 存储 API 禁词为零   | localStorage/sessionStorage/indexedDB/document.cookie 源码为零
 //   SCAN-4  使用侧 i18n 键 ⊆ DICT 键    | data-i18n 属性 + 源码 'main.|wf9..wf14.' 键引用（剥 DICT 块防自命中，排除自测假键）
-// 扫描对象：index.html + assets/*.js（主页交付物；gm/ 独立页有自己的门禁链 gm/test.mjs）。
-// 禁词在扫描器源码里以拼接书写，防止自命中。
+// CodeRabbit PR #5 线程 evwen：主页经 <link> 加载 assets/*.css，CSS 可经
+// url(//host/…) 出网而不触发标签 src/href 检测——css 并入扫描对象；
+// SCAN-1 追加 url( 跨源模式（CSS 资源引用语法，非标签属性）。
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const files = ['index.html', ...readdirSync('assets').filter(f => f.endsWith('.js')).map(f => join('assets', f))];
+const files = ['index.html', ...readdirSync('assets').filter(f => /\.(?:js|css)$/.test(f)).map(f => join('assets', f))];
 const fails = [];
 const check = (id, cond, msg) => {
   if (cond) console.log('ok   ' + id + '  ' + msg);
@@ -47,6 +48,7 @@ const netWords = ['fet' + 'ch(', 'X' + 'MLHttpRequest', 'Web' + 'Socket', 'Event
 const storeWords = ['local' + 'Storage', 'session' + 'Storage', 'indexed' + 'DB', 'document.' + 'cookie'];
 const tagRe = /<(?:script|link|img|iframe|audio|video|source|object|embed)\b[^>]*>/gi;
 const crossOriginRe = /(?:src|href)\s*=\s*["']?\s*(?:https?:)?\/\//;
+const cssUrlRe = /url\(\s*['"]?\s*(?:https?:)?\/\//gi; // 协议相对 // 与 http(s):// 均跨源；相对同源放行
 
 const hits = { cross: [], net: [], store: [] };
 for (const f of files) {
@@ -56,8 +58,12 @@ for (const f of files) {
   for (const m of s.matchAll(tagRe)) {
     if (crossOriginRe.test(m[0])) hits.cross.push(f + ': ' + m[0].slice(0, 60));
   }
+  // CSS 资源引用语法（url(//host/x) / url(https://host/x)）不产生标签属性。
+  for (const m of s.matchAll(cssUrlRe)) {
+    hits.cross.push(f + ': ' + m[0].slice(0, 60));
+  }
 }
-check('SCAN-1', !hits.cross.length, '跨源 src/href 引用为 0' + (hits.cross.length ? ' → ' + JSON.stringify(hits.cross) : ''));
+check('SCAN-1', !hits.cross.length, '跨源 src/href/url() 引用为 0' + (hits.cross.length ? ' → ' + JSON.stringify(hits.cross) : ''));
 check('SCAN-2', !hits.net.length, '网络 API 禁词为 0' + (hits.net.length ? ' → ' + JSON.stringify(hits.net) : ''));
 check('SCAN-3', !hits.store.length, '存储 API 禁词为 0' + (hits.store.length ? ' → ' + JSON.stringify(hits.store) : ''));
 

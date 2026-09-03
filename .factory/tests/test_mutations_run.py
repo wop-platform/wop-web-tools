@@ -409,14 +409,17 @@ class TestMainSmoke:
     argparse 解析 → 过滤 → 汇总 → 判定全链路不炸，退出码语义正确。
     """
 
-    def test_main_only_nonexistent_id_exit0(self, monkeypatch, capsys):
-        """--only 不存在的 id → 空清单零注入 → 全绿路径退出码 0。"""
-        monkeypatch.setattr(mut, "write_stamp", lambda *a, **k: None)  # 不动 evidence-stamp
-        monkeypatch.setattr(sys, "argv", ["run.py", "--only", "X-nonexistent"])
+    def test_main_only_subset_partial_no_stamp(self, monkeypatch, capsys):
+        """--only 合法子集 → 退出码 4 且不写周界戳（CodeRabbit evwel：部分运行
+        不构成全量 kill-rate 验证，不得伪造全量戳）。"""
+        calls: list = []
+        monkeypatch.setattr(mut, "write_stamp", lambda *a, **k: calls.append(a) or None)
+        monkeypatch.setattr(sys, "argv", ["run.py", "--only", "G-01"])
         rc = mut.main()
-        assert rc == 0
+        assert rc == 4
+        assert calls == []
         out = capsys.readouterr().out
-        assert "门灵敏度冒烟通过" in out
+        assert "部分运行" in out
 
     def test_main_missing_defects_file_raises(self, monkeypatch, tmp_path):
         """--defects 指向缺失文件 → FileNotFoundError 传播（fail-fast，无静默空跑）。"""
