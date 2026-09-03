@@ -409,17 +409,66 @@ class TestMainSmoke:
     argparse 解析 → 过滤 → 汇总 → 判定全链路不炸，退出码语义正确。
     """
 
-    def test_main_only_subset_partial_no_stamp(self, monkeypatch, capsys):
-        """--only 合法子集 → 退出码 4 且不写周界戳（CodeRabbit evwel：部分运行
-        不构成全量 kill-rate 验证，不得伪造全量戳）。"""
-        calls: list = []
-        monkeypatch.setattr(mut, "write_stamp", lambda *a, **k: calls.append(a) or None)
+    def test_main_only_subset_partial_no_stamp(self, monkeypatch):
+        """--only 合法子集 → rc 4 且 evidence-stamp 字节不变（CodeRabbit evwel：
+        部分运行不构成全量 kill-rate 验证）。真路径断言：写戳唯一出口是
+        write_stamp()，mock 拦截它只证「出口没走」；本断言直接比对 STAMP
+        前后字节，防回归成绕过函数直写文件。SKIP（target 本地 dirty）与
+        全 PASS 两分支均 rc 4 不写戳，断言通吃。"""
+        before = mut.STAMP.read_bytes() if mut.STAMP.exists() else None
         monkeypatch.setattr(sys, "argv", ["run.py", "--only", "G-01"])
         rc = mut.main()
+        after = mut.STAMP.read_bytes() if mut.STAMP.exists() else None
         assert rc == 4
-        assert calls == []
-        out = capsys.readouterr().out
-        assert "部分运行" in out
+        assert after == before
+
+    def test_main_only_nonexistent_id_config_error(self, monkeypatch, capsys):
+        """--only 含未知 id → 配置错误 rc 2（CodeRabbit evwel：过滤空清单以 0
+        退出写戳 = 配置错误伪装成全量验证；rc 2 对齐 guard 用法错误语义）。"""
+        monkeypatch.setattr(mut, "write_stamp", lambda *a, **k: None)  # 不动 evidence-stamp
+        monkeypatch.setattr(sys, "argv", ["run.py", "--only", "X-nonexistent"])
+        rc = mut.main()
+        assert rc == 2
+        assert "未知缺陷 id" in capsys.readouterr().err
+
+    def _write_probe_defects(self, tmp_path, target: str) -> str:
+        """造单缺陷配置 JSON（target 由调用方指定，find 锚点必不命中——
+        配置校验在注入前拦截，跑不到锚点检查）。"""
+        cfg = {"defects": [{
+            "id": "T-99", "gate": "guard", "target": target,
+            "find": "不可能存在的锚点 918273", "replace": "x",
+            "expect_block": True, "description": "配置校验探针",
+        }]}
+        p = tmp_path / "defects-probe.json"
+        p.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+        return str(p)
+
+    def test_main_target_outside_repo_fails_config(self, monkeypatch, capsys, tmp_path):
+        """target 越出 REPO_ROOT（`..` 与绝对路径）→ FAIL-config → rc 1
+        （CodeRabbit evwek：--defects 外部 JSON 指向仓外文件注入+写回，
+        进程非正常终止 = 注入残留落仓外）。"""
+        for target in ("../escape-probe-918273", str(tmp_path / "outside-918273")):
+            monkeypatch.setattr(sys, "argv", ["run.py", "--defects",
+                                              self._write_probe_defects(tmp_path, target)])
+            rc = mut.main()
+            assert rc == 1
+            out = capsys.readouterr().out
+            assert "越出仓库根" in out
+
+    def test_main_target_untracked_fails_config(self, monkeypatch, capsys, tmp_path):
+        """仓内未跟踪 target → FAIL-config → rc 1（CodeRabbit evwek：注入残留
+        无 git 基线可检出；untracked 文件不可见污染）。探针文件用完即删。"""
+        probe = mut.REPO_ROOT / ".factory" / "mutations" / "untracked-probe-918273.js"
+        probe.write_text("// probe", encoding="utf-8")
+        try:
+            monkeypatch.setattr(sys, "argv", ["run.py", "--defects",
+                                              self._write_probe_defects(
+                                                  tmp_path, ".factory/mutations/untracked-probe-918273.js")])
+            rc = mut.main()
+            assert rc == 1
+            assert "未被 git 跟踪" in capsys.readouterr().out
+        finally:
+            probe.unlink(missing_ok=True)
 
     def test_main_missing_defects_file_raises(self, monkeypatch, tmp_path):
         """--defects 指向缺失文件 → FileNotFoundError 传播（fail-fast，无静默空跑）。"""

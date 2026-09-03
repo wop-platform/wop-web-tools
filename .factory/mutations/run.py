@@ -366,6 +366,10 @@ def main() -> int:
             outcomes.append(Outcome(d, "FAIL-config", f"target 越出仓库根: {d.target}"))
             print("    FAIL-config: target 越出仓库根")
             continue
+        if not target.is_file():
+            outcomes.append(Outcome(d, "FAIL-config", f"target 不存在: {d.target}"))
+            print("    FAIL-config: target 不存在")
+            continue
         rel = str(target.relative_to(REPO_ROOT))
         ls = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "ls-files", "--error-unmatch", "--", rel],
