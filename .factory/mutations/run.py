@@ -122,12 +122,21 @@ DOCSTRING_GATE = _docstring_gate_words()
 GUARD_TIMEOUT = 300
 TESTS_TIMEOUT = 600
 
-def write_stamp(evidence: str = "EVIDENCE-2026-08-24.md") -> str | None:
-    """全绿出口调用：当前周界 blob 写入 stamp（None = 无法绑定，不写）。"""
+def write_stamp(evidence: str | None = None) -> str | None:
+    """全绿出口调用：当前周界 blob 写入 stamp（None = 无法绑定，不写）。
+
+    evidence 指向人工证据留档名；缺省时取 mutations/ 目录最新
+    EVIDENCE-*.md（CodeRabbit PR #5 线程 evweh：静态默认文件名会过期，
+    写戳引用不存在的留档 = stamp 说谎）。无留档如实记「无留档文件」。
+    """
     import datetime
     blob = perimeter_blob()
     if not blob:
         return None
+    if evidence is None:
+        ev_dir = STAMP.parent
+        cands = sorted(ev_dir.glob("EVIDENCE-*.md")) if ev_dir.is_dir() else []
+        evidence = cands[-1].name if cands else "（无留档文件）"
     STAMP.write_text(json.dumps({
         "perimeter_blob": blob,
         "evidence": evidence,
@@ -327,21 +336,45 @@ def main() -> int:
 
     defects = load_defects(Path(args.defects))
     stamp_stale_banner()
+    partial = False
     if args.only:
         wanted = {x.strip() for x in args.only.split(",") if x.strip()}
+        # CodeRabbit PR #5 线程 evwel：未知 id 过滤结果为空仍以 0 退出写戳
+        # = 配置错误伪装成全量验证。缺失即拒绝（exit 2，对齐 guard 用法语义）。
+        all_ids = {d.id for d in defects}
+        missing = wanted - all_ids
+        if missing:
+            print(f"配置错误: --only 含未知缺陷 id: {sorted(missing)}"
+                  f"（已知: {sorted(all_ids)}）", file=sys.stderr)
+            return 2
         defects = [d for d in defects if d.id in wanted]
+        partial = True
 
     outcomes: list[Outcome] = []
     originals: dict[Path, str] = {}
 
     for d in defects:
         print(f"[{d.id}] {d.description}（gate={d.gate}）")
-        target = REPO_ROOT / d.target
-        if not target.is_file():
-            outcomes.append(Outcome(d, "FAIL-config", f"target 不存在: {d.target}"))
-            print("    FAIL-config: target 不存在")
+        # CodeRabbit PR #5 线程 evwek：d.target 绝对路径会重置 REPO_ROOT 拼接
+        # （Path / 语义），`..` 可越仓——--defects 载外部 JSON 时指向仓外文件
+        # 注入+写回（进程非正常终止 = 注入残留落仓外）。resolve 后必须仍在
+        # REPO_ROOT 内；target 未被 git 跟踪同样拒绝（残留无基线可检出）。
+        target = (REPO_ROOT / d.target).resolve()
+        try:
+            target.relative_to(REPO_ROOT)
+        except ValueError:
+            outcomes.append(Outcome(d, "FAIL-config", f"target 越出仓库根: {d.target}"))
+            print("    FAIL-config: target 越出仓库根")
             continue
-        if tracked_and_dirty(d.target):
+        rel = str(target.relative_to(REPO_ROOT))
+        ls = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "--error-unmatch", "--", rel],
+            capture_output=True, env=_GIT_ENV)
+        if ls.returncode != 0:
+            outcomes.append(Outcome(d, "FAIL-config", f"target 未被 git 跟踪: {d.target}"))
+            print("    FAIL-config: target 未被 git 跟踪（无基线可检出还原）")
+            continue
+        if tracked_and_dirty(rel):
             outcomes.append(Outcome(d, "SKIP", "target 含人工未提交修改"))
             print("    SKIP: target 含人工未提交修改，避免交叠")
             continue
@@ -403,6 +436,10 @@ def main() -> int:
     if skipped:
         ids = ", ".join(o.defect.id for o in skipped)
         print(f"  结论: 覆盖不完整（SKIP: {ids}），本次通过不构成 auto-merge 依据（铁律 5）")
+        return 4
+    if partial:
+        print("  结论: 部分运行（--only）通过，不构成全量 kill-rate 验证，"
+              "不写周界戳（CodeRabbit evwel）")
         return 4
     print("  结论: 门灵敏度冒烟通过（auto-merge 的必要非充分条件）")
     if blob := write_stamp():

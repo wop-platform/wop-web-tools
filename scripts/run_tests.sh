@@ -16,7 +16,10 @@ for a in "$@"; do
   [ "$a" = "--no-lock" ] && continue
 done
 RC=0
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || {
+  echo "run_tests.sh: cannot change to repository root" >&2
+  exit 1
+}
 
 echo "== gate 1/5: syntax (assets/*.js) =="
 for f in assets/*.js; do node --check "$f" || RC=1; done
