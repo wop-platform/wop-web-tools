@@ -425,7 +425,10 @@ if [ "${DRY}" = 0 ]; then
     < <(git -C "${WT}" diff --name-only -z ${BASE_BRANCH}..."${BRANCH}" 2>/dev/null || true)
   [ "${#CHANGED[@]}" -eq 0 ] && while IFS= read -r -d '' f; do CHANGED+=("$f"); done \
     < <(git -C "${WT}" diff --name-only -z HEAD~1 2>/dev/null || true)
-  python3 "${REPO}/.factory/guard.py" --files "${CHANGED[@]}"
+  # bash 3.2 set -u 下空数组 "${a[@]}" 亦 fatal（unbound variable，4.4 才修）：
+  # ${a[@]+...} 惯用法——空 = 零参数（等价修前 `--files` 空参由 guard 报用法），
+  # 非空 = 逐元素引号展开（duaiK 语义保持）
+  python3 "${REPO}/.factory/guard.py" --files ${CHANGED[@]+"${CHANGED[@]}"}
   # ADR-009 门命令数据化：final_gate_cmd 来自 factory-local.json（fail-closed：
   # factory_lib 加载失败此处即非零终止）；read -ra 拆词为 argv 数组执行。
   GATE_CMD="$(python3 "${REPO}/.factory/factory_lib.py" final-gate)"
@@ -445,7 +448,7 @@ if [ "${DRY}" = 0 ]; then
   fi
   # 证据段：触及的测试套件以 -v 重跑附于末尾——holdout 不许推测，
   # 需要可引用的测试名/参数化用例名（-q 点号无法建立诉求对应关系）
-  for suite in $(python3 "${REPO}/.factory/factory_lib.py" suites "${CHANGED[@]}"); do
+  for suite in $(python3 "${REPO}/.factory/factory_lib.py" suites ${CHANGED[@]+"${CHANGED[@]}"}); do
     [ -d "${WT}/${suite}" ] || continue
     echo "" >> "${DIR}/tests-output.txt"
     echo "── 证据段（verbose）: ${suite}" >> "${DIR}/tests-output.txt"
