@@ -8,9 +8,9 @@
  *   3.3 算法参数 / 6.1 DEK 载荷 / 6.2 alg 族比对时序（D8）
  *   10.1 不变式 I1（digest 入签）I2（先验签后解密）I3（族比对先于解密）
  *        I4（IV 永不复用）I7（对外模糊化）；10.2 错误分类
- * 密钥角色（TEST-ONLY，来源 WOP_VECTORS 黄金向量）：
- *   商户密钥对 = rsa4096（SHA256withRSA 签名，512B/683 字符恒长）
- *   平台密钥对 = rsa3072（RSA-OAEP 双SHA-256 包装/解包 DEK）
+ * 密钥角色（TEST-ONLY）：
+ *   商户密钥对 = rsa2048（SHA256withRSA 签名，256B/342 字符恒长 · 本地 TEST-ONLY 教学向量，见下方 TEACH 夹具）
+ *   平台密钥对 = rsa3072（RSA-OAEP 双SHA-256 包装/解包 DEK，来源 WOP_VECTORS 黄金向量）
  * 注：演示为确定性教学夹具——固定 DEK/IV 仅用于与黄金向量字节级对拍；
  *     生产环境每次出站必须 CSPRNG 新 DEK/IV（I4），界面已标注。
  * ============================================================ */
@@ -26,8 +26,24 @@
     catch (e) { return fb; }
   }
 
-  var MERCHANT = 'rsa4096';   // 商户签名密钥（套件 WOP-RSA4096-SHA256）
+  var MERCHANT = 'rsa2048';   // 商户签名密钥（套件 WOP-RSA2048-SHA256）
   var PLATFORM = 'rsa3072';   // 平台 DEK 包装/解包密钥
+
+  // —— 本地教学夹具（TEST-ONLY，非 wop-specs 黄金向量）——
+  // wop-specs F8 黄金向量仅含 rsa3072/rsa4096；此 rsa2048 密钥对/签名由 node:crypto 本地生成
+  // （2026-09-07 · PKCS#8/SPKI 无填充 base64url），PKCS#1 v1.5 签名确定 → 教学可复现。
+  var TEACH = {
+    keys: {
+      priv: 'MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDItI77lA4QT6_hLDtSxeVdNlQ7DWhcuyJ9bocHCbDUWcDE2Xwn7mAURtgKaXaOIRczJtondCT_j_1sWRqEovs1vtwJVd161nvFEdp3W8MQrrStSEIUkPQ3aWoVrWOtOQJILCYbarWO04NKp3jFnnyXkOVkiJUT0dSjcT9S9EyZ8uB26Z9mrfjuxjDT0rj4p_u3DCRj86oIG4U8yRwJsOod1umTO8KAug_GOea-PdeSVmQSxzOtCX-QQPtFLaR2pipB8FwmGEOQdI4NspERfqerM1TSnW1xoKKJ6sBvJLjzVUApjQf4Efqtc6c21Adeiw2oPtbzUhjiV-skm5C8rWdlAgMBAAECggEAGjb7NgDwlVDTOCX-2aDfhH1EIzJtHy-SIa_-Ev1BC3ttokiF3vFTu1JFhZag1Y-c6CF6_Qw-iOLVxwEcZZakGTEErHN6qkC5idP7JPvnTpaDIt79QpJsU5CBOrObAVUg5yxdDdeyPyWBUI7vR2CcBW_3hloQnrYZf_-atcsS9kh3STN2o7Wlz6Uow0jnLR_1GH2Dj6AHACTY1wPE4ke6WzmQM-fKHF2S7YnpZkUi6WG5KoNJPZe8C94KUJc45gHH6apZ4jAqnQCTiX6JbJbx8YLGrKfDwNRE0bt1Uv7yjhnK-weSTH_jc52YCI_AperBtIEkzXbmAFXrhD-dSpzJQQKBgQD-_F-y0CnAupUWcijt-QnP4W88bU1I5W6IEkPbP0oiOnEXMHM1PGFM6KnL7JN7Bk67p3GqrQDlpqxGrtQwjMmeRCj8FQpAf6J8KPq2OPN8NccLYevv3SpJwDjaWbPKL92HDpufv59f2-nKzTqeVg8nwTsKeBcQdwOU0NNNCcq-rwKBgQDJgOqWPhqp7gCFyuJsEwXwucgW8Udv9scJuyFeRun93vlWh2Oli-SBdN1qPs7uiQUwbVqvu5QJS9nnWYiKfHFsi9O10oxu0F3G8g3l_0qdkYN9Ir5l4E37x0tJqLFdYus_5jstPh_TLWFRdkk5fdrkfS4beex0WE-tHGvd8y6gKwKBgQCLnE0dj8I8pyw4JPtqCMAplQodsM7vCcfyMuX6ZnXFte_zvXBnBo9T19QYNoktg--Z6X1f8Oeb1h1fehvuFTfTMwiptS9uzzN8_cb__MC8EonQHqZbJ-IejWPTkefR3VFSwFnPJtExYCxrAOGGjiIwJymXetdOCYvpcEkxVhovOwKBgG6gRCov9luMuuS5Og2zc_NxS5Ss6ldh2GxTPEKSFCy4mZMTyXU9lDouetC1os36k8q-fqc0CFYCOqN02C2PnIXHTnfoHAlKg_GROmgm_EP9e37b8EPmHWo5Q_AwmQ94G0d9kseH79j0dRVQJ2tU2TPQNdwH1_UX9sZHcEDuHY75AoGBAJ8j4hGVdWizzpDDJrfzxseJhELSMkULsbK6Wfior6CsuydSVtspN_zCFc9LPh-HlnP_rZwwuFBg3XQs_gJPTvS4m_oZOtbWfckQJnXu02H2lFjzOMQmYSmGpRT6qWmUDTKRLWmjw5g_xfpAqFXFs3OQrgUxmI3ep3gVXGpi_wo3',
+      pub: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyLSO-5QOEE-v4Sw7UsXlXTZUOw1oXLsifW6HBwmw1FnAxNl8J-5gFEbYCml2jiEXMybaJ3Qk_4_9bFkahKL7Nb7cCVXdetZ7xRHad1vDEK60rUhCFJD0N2lqFa1jrTkCSCwmG2q1jtODSqd4xZ58l5DlZIiVE9HUo3E_UvRMmfLgdumfZq347sYw09K4-Kf7twwkY_OqCBuFPMkcCbDqHdbpkzvCgLoPxjnmvj3XklZkEsczrQl_kED7RS2kdqYqQfBcJhhDkHSODbKREX6nqzNU0p1tcaCiierAbyS481VAKY0H-BH6rXOnNtQHXosNqD7W81IY4lfrJJuQvK1nZQIDAQAB'
+    },
+    sign: {
+      message: 'WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.',
+      expectedSigB64u: 'Szq-acFe7pktORli8rC0IzxwdLrH6bqGZnM3YSC1-HBqdM59KfudsH4LRaqkOJ3T_RdMHUw0eCLMpm69rpgE6AJo3pOqASgkaebY7Gyd3dqlJimk0BXN37iVXoT6NPhOJNhdJlZoANIDLwP1bhFCUg2lEmIbvUwXp9OKc0ptiZMasmSCq6hOmtJkLBNm6VhQiSJuhYqMKy6TRZ1FjsK7kv5eDZxy0APqLiWkEfeGyZSCc7GcZJsfH5q1zFPPZWJI8Xdpf9H360EPdE4XKpcrEbNFCLJu6XNsgSlwgdMpK5HHvvn2tieKO7ChhJpPx-LtcnTT0BIzbJcf9I956WS25w',
+      sigLenBytes: 256,
+      b64uLen: 342
+    }
+  };
 
   // 固定演示参数 → canonical 确定 → PKCS#1 v1.5 签名确定（教学可复现）
   var DEMO = {
@@ -36,7 +52,7 @@
     nonce: '1a2b3c4d5e6f7890',
     ts: '1756600000000',
     expired: '1800',
-    suite: 'WOP-RSA4096-SHA256'
+    suite: 'WOP-RSA2048-SHA256'
   };
 
   var STAGES = {
@@ -113,7 +129,7 @@
   async function signMessage(env, headers) {
     var auth = 'v1/' + DEMO.expired;
     env.canonical = buildCanonical(auth, 'POST', DEMO.path, '', canonicalHeaders(headers));
-    var signKey = await impPrivSign(bytesFromB64url(WOP_VECTORS.keys[MERCHANT].priv));
+    var signKey = await impPrivSign(bytesFromB64url(TEACH.keys.priv));
     env.sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, te(env.canonical)));
     env.sigB64u = b64urlFromBytes(env.sig);
     var names = Object.keys(headers).sort().join(';');
@@ -145,7 +161,7 @@
     var push = function (stage, ok, text) { steps.push({ stage: stage, ok: ok, text: text }); };
 
     // ① 验签（I2：先验签后解密）：网关按收到的头重算 canonical 再验——任何入签头被改动即破签（I1）
-    var verKey = await impPubVerify(bytesFromB64url(WOP_VECTORS.keys[MERCHANT].pub));
+    var verKey = await impPubVerify(bytesFromB64url(TEACH.keys.pub));
     var wireCanonical = buildCanonical('v1/' + DEMO.expired, 'POST', DEMO.path, '', canonicalHeaders(msg.headers));
     var sigOk = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', verKey, msg.sig, te(wireCanonical));
     push('verify', sigOk, sigOk
@@ -328,7 +344,7 @@
       kv('签名头（前缀）', trunc(env.signHeader.slice(0, env.signHeader.lastIndexOf('/')), 72, 12))
       + kv('签名值（尾 16 字符）', '…' + env.sigB64u.slice(-16))
       + kv('签名长度', env.sig.length + ' 字节 / base64url ' + env.sigB64u.length + ' 字符（恒长）')
-      + kv('算法', 'SHA256withRSA（PKCS#1 v1.5）· 商户 RSA-4096 私钥（TEST-ONLY 向量）')
+      + kv('算法', 'SHA256withRSA（PKCS#1 v1.5）· 商户 RSA-2048 私钥（TEST-ONLY 教学向量）')
       + kv('签名对象', 'canonicalRequest 五段式（authString / METHOD / path / queryString / canonicalHeaders）')
       + '<div class="wf12-note">' + esc(T('wf12.demo.s2.note', '签名覆盖全部参与签名的头（含 digest 与 encrypt，I1）；PKCS#1 v1.5 签名确定性——同一 canonical 必得同一签名值')) + '</div>';
   }
@@ -470,7 +486,7 @@
 
   /* ============ 命名空间导出（供 selftest / 集成者调试） ============ */
   var WF12 = {
-    DEMO: DEMO, MERCHANT: MERCHANT, PLATFORM: PLATFORM, STAGES: STAGES,
+    DEMO: DEMO, MERCHANT: MERCHANT, PLATFORM: PLATFORM, STAGES: STAGES, TEACH: TEACH,
     buildDekPayload: buildDekPayload, parseDekPayload: parseDekPayload,
     buildEnvelope: buildEnvelope, buildDemoMessage: buildDemoMessage, signMessage: signMessage,
     verifyPipeline: verifyPipeline, firstFailStage: firstFailStage, stageLabel: stageLabel,

@@ -138,7 +138,7 @@
   function buildPreviewCanonical() {
     var appKey = fieldValue('r-appkey') || '(appKey 为空)';
     var path = fieldValue('r-path') || '/';
-    var expired = String(parseInt(fieldValue('r-expired'), 10) || 1800);
+    var expired = String(parseInt(fieldValue('r-expired'), 10) || 300);
     var body = fieldValue('r-body');
     var level = fieldValue('r-level');
     var headers = {

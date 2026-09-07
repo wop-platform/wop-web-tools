@@ -66,7 +66,7 @@
     var noBody = method === 'GET' || body.replace(/^\s+|\s+$/g, '') === '';
     return {
       appKey: ctx.appKey == null ? '' : String(ctx.appKey),
-      suite: val(ctx.suite, 'WOP-RSA3072-SHA256'),
+      suite: val(ctx.suite, 'WOP-RSA2048-SHA256'),
       merchantPriv: ctx.merchantPriv == null ? '' : String(ctx.merchantPriv),
       platformPub: ctx.platformPub == null ? '' : String(ctx.platformPub),
       method: method,
@@ -437,7 +437,7 @@
     var suite = sel && sel.value ? sel.value : 'auto';
     if (suite === 'auto') {
       var rs = byId('r-suite');
-      suite = rs && rs.value ? rs.value : 'WOP-RSA3072-SHA256';
+      suite = rs && rs.value ? rs.value : 'WOP-RSA2048-SHA256';
     }
     var msel = byId('wf9-method');
     return {
@@ -561,6 +561,7 @@
       <label for="wf9-suite"><span class="i18n" data-i18n="wf9.suite">套件</span></label>
       <select id="wf9-suite">
         <option value="auto" selected data-i18n="wf9.suite.auto">跟随请求构造 Tab</option>
+        <option value="WOP-RSA2048-SHA256">WOP-RSA2048-SHA256</option>
         <option value="WOP-RSA3072-SHA256">WOP-RSA3072-SHA256</option>
         <option value="WOP-RSA4096-SHA256">WOP-RSA4096-SHA256</option>
         <option value="WOP-SM2-SM3">WOP-SM2-SM3</option>

@@ -1,5 +1,5 @@
 # WOP Web Tools
-[![CI](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-web-tools)](LICENSE) [![Selftest](https://img.shields.io/badge/selftest-155%20assertions-brightgreen)](#自测) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![CI](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-web-tools)](LICENSE) [![Selftest](https://img.shields.io/badge/selftest-157%20assertions-brightgreen)](#自测) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 浏览器端 WOP 商户工作台：密钥生成 · 报文构造/验证 · 国密 SM2-SM3 · 联调辅助。
 
@@ -12,7 +12,7 @@
 
 | Tab | 能力 |
 |---|---|
-| 密钥生成 | RSA 3072/4096 密钥对、PKCS#8/SPKI、PEM/Base64、三重自检、公钥指纹 |
+| 密钥生成 | RSA 2048/3072/4096 密钥对（默认 2048）、PKCS#8/SPKI、单行 Base64/PEM（默认单行）、三重自检、公钥指纹 |
 | 报文联调 | 构造请求（canonical/sign/digest/L2 信封/curl）、验证平台报文、模拟响应/回调闭环 |
 | 国密（WOP-SM2-SM3） | SM2 密钥对生成、国密请求构造（SM4-GCM 信封 + SM2 C1C3C2 DEK 包装）、五步验证流水线（验签→SM3 复核→DEK 解包→套件族比对→SM4-GCM 解密）、黄金向量一键装载 |
 | 代码片段（WF9） | 同一请求产出六语言（Java/Go/TS/Python/PHP/.NET）官方 SDK 调用片段 |
@@ -21,13 +21,13 @@
 | 教学图解（WF12） | 数字信封 L0/L2 层级图 + 真实密码学交互演示 + 四类错误路径拦截 |
 | 错误诊断（WF8） | 62 码公共契约字典：含义/处置/归属/可重试性 |
 | 粘贴解析（WF7） | 原始 HTTP 报文整体粘贴自动回填验证区 |
-| 向量自测 | 内置黄金向量一键跑字节级断言（正向量 + 负向量），自测 155 项全绿 |
+| 向量自测 | 内置黄金向量一键跑字节级断言（正向量 + 负向量；rsa2048 商户签名以 TEST-ONLY 教学向量对拍），自测 157 项全绿 |
 
 > 说明：回调协议语义已对齐 wop-sdk-spec v1.0-ratified（F3/F6）；SM2 签名 userId 取请求头 `x-wop-appkey` 值（契约，2026-08-31 飞书裁决，见 `docs/spec.md` D2）；黄金向量夹具固定 `1234567812345678` 仅作测试载体。
 
 ## 自测
 
-页面底部「运行自测」：155 项断言 = WF1–WF14 各切片 + 宪法级 S1/S2 壳自扫描 + 国密金向量（GM-P1..P11）+ 国密分派负路径（GM-K1/K2/K3/K3-appkey-empty）。全部通过显示「全部通过」。
+页面底部「运行自测」：157 项断言 = WF1–WF14 各切片 + 宪法级 S1/S2 壳自扫描 + 国密金向量（GM-P1..P11）+ 国密分派负路径（GM-K1/K2/K3/K3-appkey-empty）+ rsa2048 商户签名教学向量对拍。全部通过显示绿色横幅（黄金向量对齐 + 教学向量注记）。
 
 - 自扫描守护（两层）：页内壳自扫描断言 DOM 无跨源 `src=`/`href=`（S1）；源码级禁词
   （`fetch(` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / `localStorage` / `sessionStorage` /
