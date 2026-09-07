@@ -561,6 +561,7 @@
       <label for="wf9-suite"><span class="i18n" data-i18n="wf9.suite">套件</span></label>
       <select id="wf9-suite">
         <option value="auto" selected data-i18n="wf9.suite.auto">跟随请求构造 Tab</option>
+        <option value="WOP-RSA2048-SHA256">WOP-RSA2048-SHA256</option>
         <option value="WOP-RSA3072-SHA256">WOP-RSA3072-SHA256</option>
         <option value="WOP-RSA4096-SHA256">WOP-RSA4096-SHA256</option>
         <option value="WOP-SM2-SM3">WOP-SM2-SM3</option>

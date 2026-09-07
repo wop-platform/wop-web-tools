@@ -12,7 +12,7 @@
 
 | Tab | 能力 |
 |---|---|
-| 密钥生成 | RSA 3072/4096 密钥对、PKCS#8/SPKI、PEM/Base64、三重自检、公钥指纹 |
+| 密钥生成 | RSA 2048/3072/4096 密钥对（默认 2048）、PKCS#8/SPKI、单行 Base64/PEM（默认单行）、三重自检、公钥指纹 |
 | 报文联调 | 构造请求（canonical/sign/digest/L2 信封/curl）、验证平台报文、模拟响应/回调闭环 |
 | 国密（WOP-SM2-SM3） | SM2 密钥对生成、国密请求构造（SM4-GCM 信封 + SM2 C1C3C2 DEK 包装）、五步验证流水线（验签→SM3 复核→DEK 解包→套件族比对→SM4-GCM 解密）、黄金向量一键装载 |
 | 代码片段（WF9） | 同一请求产出六语言（Java/Go/TS/Python/PHP/.NET）官方 SDK 调用片段 |

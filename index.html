@@ -39,26 +39,28 @@
     <fieldset>
       <legend data-i18n="main.kg.bits">密钥长度</legend>
       <div class="radios" id="bitlen">
-        <label><input type="radio" name="bits" value="3072" checked>
-          <span><b data-i18n="main.kg.bits.3072">3072 位（推荐）</b><small data-i18n="main.kg.bits.3072.s">对应安全套件 WOP-RSA3072-SHA256</small></span></label>
+        <label><input type="radio" name="bits" value="2048" checked>
+          <span><b data-i18n="main.kg.bits.2048">2048 位（默认）</b><small data-i18n="main.kg.bits.2048.s">对应安全套件 WOP-RSA2048-SHA256</small></span></label>
+        <label><input type="radio" name="bits" value="3072">
+          <span><b data-i18n="main.kg.bits.3072">3072 位</b><small data-i18n="main.kg.bits.3072.s">对应安全套件 WOP-RSA3072-SHA256</small></span></label>
         <label><input type="radio" name="bits" value="4096">
           <span><b data-i18n="main.kg.bits.4096">4096 位</b><small data-i18n="main.kg.bits.4096.s">对应安全套件 WOP-RSA4096-SHA256</small></span></label>
       </div>
-            <p class="hint" style="margin:8px 0 0" data-i18n="main.kg.bits.note">注：如被要求生成「3074 位密钥」，即为笔误——RSA 不存在 3074 位，请选择 3072。平台已冻结三套件（WOP-RSA3072-SHA256 / WOP-RSA4096-SHA256 / WOP-SM2-SM3，见 wop-specs）；本页请求构造支持 RSA 两套件，国密 WOP-SM2-SM3 请切换到「国密」标签页构造与验证。</p>
+            <p class="hint" style="margin:8px 0 0" data-i18n="main.kg.bits.note">注：密钥长度支持 2048 / 3072 / 4096 位，默认 2048 位。如被要求生成「3074 位密钥」，即为笔误——RSA 不存在 3074 位，请选择 3072 位。本页请求构造支持 WOP-RSA2048-SHA256 / WOP-RSA3072-SHA256 / WOP-RSA4096-SHA256 套件；国密 WOP-SM2-SM3 请切换到「国密」标签页构造与验证。</p>
     </fieldset>
     <div class="selects">
       <div>
         <label for="privfmt" data-i18n="main.kg.privfmt">私钥格式</label>
         <select id="privfmt">
-          <option value="pkcs8" selected data-i18n="main.kg.privfmt.pem">PKCS#8 PEM（推荐 · 平台文档格式）</option>
-          <option value="base64" data-i18n="main.kg.privfmt.b64">单行 Base64（PKCS#8 DER · 网关程序对接格式）</option>
+          <option value="base64" selected data-i18n="main.kg.privfmt.b64">单行 Base64（默认 · PKCS#8 DER · 网关程序对接格式）</option>
+          <option value="pkcs8" data-i18n="main.kg.privfmt.pem">PKCS#8 PEM（平台文档格式）</option>
         </select>
       </div>
       <div>
         <label for="pubfmt" data-i18n="main.kg.pubfmt">公钥格式</label>
         <select id="pubfmt">
-          <option value="spki" selected data-i18n="main.kg.pubfmt.pem">X.509 SPKI PEM（推荐 · 平台文档格式）</option>
-          <option value="base64" data-i18n="main.kg.pubfmt.b64">单行 Base64（SPKI DER · 网关程序对接格式）</option>
+          <option value="base64" selected data-i18n="main.kg.pubfmt.b64">单行 Base64（默认 · SPKI DER · 网关程序对接格式）</option>
+          <option value="spki" data-i18n="main.kg.pubfmt.pem">X.509 SPKI PEM（平台文档格式）</option>
         </select>
       </div>
     </div>
@@ -144,7 +146,7 @@
         </div>
         <div class="field"><label for="r-host" data-i18n="main.req.host">网关地址（仅用于生成 curl）</label><input id="r-host" value="https://gateway.example.com"></div>
         <div class="field"><label for="r-suite" data-i18n="main.req.suite">安全套件</label>
-          <select id="r-suite"><option>WOP-RSA3072-SHA256</option><option>WOP-RSA4096-SHA256</option><option>WOP-SM2-SM3</option></select>
+          <select id="r-suite"><option>WOP-RSA2048-SHA256</option><option>WOP-RSA3072-SHA256</option><option>WOP-RSA4096-SHA256</option><option>WOP-SM2-SM3</option></select>
         </div>
       </div>
       <div class="field" style="margin-top:12px">
@@ -178,6 +180,7 @@
       <label for="wf9-suite"><span class="i18n" data-i18n="wf9.suite">套件</span></label>
       <select id="wf9-suite">
         <option value="auto" selected data-i18n="wf9.suite.auto">跟随请求构造 Tab</option>
+        <option value="WOP-RSA2048-SHA256">WOP-RSA2048-SHA256</option>
         <option value="WOP-RSA3072-SHA256">WOP-RSA3072-SHA256</option>
         <option value="WOP-RSA4096-SHA256">WOP-RSA4096-SHA256</option>
         <option value="WOP-SM2-SM3">WOP-SM2-SM3</option>
@@ -360,7 +363,7 @@
 ============================================================ -->
 <div id="wf12-root">
   <h3 class="i18n" data-i18n="wf12.title">数字信封图解（L0/L2）</h3>
-  <p class="wf12-sub i18n" data-i18n="wf12.sub">签名与信封加密的层级关系：L2 报文的 digest 摘要对象是密文、DEK 经 RSA-OAEP 包装；演示使用 wop-specs 黄金向量 TEST-ONLY 密钥</p>
+  <p class="wf12-sub i18n" data-i18n="wf12.sub">签名与信封加密的层级关系：L2 报文的 digest 摘要对象是密文、DEK 经 RSA-OAEP 包装；演示密钥均为 TEST-ONLY（digest/信封对拍 wop-specs 黄金向量，商户签名钥 rsa2048 为本地教学向量）</p>
 
   <!-- —— 静态层级图 —— -->
   <div class="wf12-card">
@@ -415,7 +418,7 @@
 
         <rect class="wf12-bxA" x="524" y="150" width="176" height="56" rx="8"/>
         <text class="wf12-t1" x="612" y="170" text-anchor="middle">x-wop-sign</text>
-        <text class="wf12-t2" x="612" y="186" text-anchor="middle">WOP-RSA4096-SHA256</text>
+        <text class="wf12-t2" x="612" y="186" text-anchor="middle">WOP-RSA2048-SHA256</text>
         <text class="wf12-t2" x="612" y="198" text-anchor="middle">v1/1800/头清单/签名</text>
 
         <line class="wf12-line" x1="416" y1="178" x2="520" y2="178" marker-end="url(#wf12-arrow)"/>
@@ -431,7 +434,7 @@
         <path class="wf12-line wf12-wire" d="M 336 92 V 120 H 798 V 146" marker-end="url(#wf12-arrow)"/>
         <text class="wf12-an2" x="566" y="114" text-anchor="middle">wireBody（密文）</text>
 
-        <text class="wf12-an" x="8" y="226">④ canonical（五段式）→ SHA256withRSA（商户私钥 RSA-4096）→ 512 字节恒长签名</text>
+        <text class="wf12-an" x="8" y="226">④ canonical（五段式）→ SHA256withRSA（商户私钥 RSA-2048）→ 256 字节恒长签名</text>
 
         <!-- 线上传输 -->
         <path class="wf12-line" d="M 798 206 V 252 H 82 V 302" marker-end="url(#wf12-arrow)"/>

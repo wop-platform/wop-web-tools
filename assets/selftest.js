@@ -700,17 +700,17 @@
         'sha-256(向量输入)=' + hex.slice(0, 16) + '…；头解析 alg=sha-256 且 hex 逐字一致');
     } catch (e) { add('WF12.digest 黄金摘要对拍', false, '异常：' + (e && e.message ? e.message : e)); }
 
-    // —— A2 spec:WF12.sign 黄金签名对拍（PKCS#1 v1.5 确定性 · 512B/683 字符）——
+    // —— A2 spec:WF12.sign 签名对拍（PKCS#1 v1.5 确定性 · 256B/342 字符 · rsa2048 本地教学向量）——
     try {
-      var signKey = await crypto.subtle.importKey('pkcs8', bytesFromB64url(V.keys.rsa4096.priv),
+      var signKey = await crypto.subtle.importKey('pkcs8', bytesFromB64url(W.TEACH.keys.priv),
         { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
       var sig = b64urlFromBytes(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',
-        signKey, new TextEncoder().encode(V.sign.rsa4096.message))));
+        signKey, new TextEncoder().encode(W.TEACH.sign.message))));
       var sigBytes = bytesFromB64url(sig);
-      add('WF12.sign 黄金签名对拍',
-        sig === V.sign.rsa4096.expectedSigB64u && sigBytes.length === V.sign.rsa4096.sigLenBytes && sig.length === V.sign.rsa4096.b64uLen,
-        '签名 ' + sigBytes.length + 'B / base64url ' + sig.length + ' 字符，与黄金向量字节级一致');
-    } catch (e) { add('WF12.sign 黄金签名对拍', false, '异常：' + (e && e.message ? e.message : e)); }
+      add('WF12.sign 签名对拍（rsa2048 教学向量）',
+        sig === W.TEACH.sign.expectedSigB64u && sigBytes.length === W.TEACH.sign.sigLenBytes && sig.length === W.TEACH.sign.b64uLen,
+        '签名 ' + sigBytes.length + 'B / base64url ' + sig.length + ' 字符，与本地教学向量字节级一致');
+    } catch (e) { add('WF12.sign 签名对拍（rsa2048 教学向量）', false, '异常：' + (e && e.message ? e.message : e)); }
 
     // —— A3 spec:WF12.sign-demo 确定性与全通过 ——
     // 注：RSA-OAEP 包装随机化（I4 邻接语义），故断言确定性核心（载荷/密文/摘要/签名长度），
@@ -725,9 +725,9 @@
       add('WF12.sign-demo 构造确定性',
         a.payload === b.payload && a.wireBody === b.wireBody && a.wireDigest === b.wireDigest
           && a.plainDigest === b.plainDigest && a.signedNames === b.signedNames
-          && preA === preB && a.sig.length === 512
+          && preA === preB && a.sig.length === 256
           && W.firstFailStage(stA) === null && W.firstFailStage(stB) === null && stA.length === 5,
-        '两次构造：payload/wireBody/双摘要/签名头前缀恒同，签名恒 512B；五步校验两次全通过');
+        '两次构造：payload/wireBody/双摘要/签名头前缀恒同，签名恒 256B；五步校验两次全通过');
     } catch (e) { add('WF12.sign-demo 构造确定性', false, '异常：' + (e && e.message ? e.message : e)); }
 
     // —— A4 spec:WF12.envelope 信封黄金对拍（6.1 三段式 / F6 严格 base64url / F4 密文格式）——

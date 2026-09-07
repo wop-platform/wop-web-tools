@@ -7,7 +7,7 @@
 `gtsp-wop-gateway`（codeup 内部仓）`docs/tools/rsa-keygen.html` 是一个纯静态单文件工具，
 两个能力已被商户实际使用：
 
-1. **密钥生成**：RSA 3072/4096 密钥对（Web Crypto 本地生成，零上传），PKCS#8/SPKI、PEM/Base64，
+1. **密钥生成**：RSA 2048/3072/4096 密钥对（默认 2048；Web Crypto 本地生成，零上传），PKCS#8/SPKI、单行 Base64/PEM（默认单行），
    三重自检（签名往返 / RSA-OAEP 加密往返 / 模数位校验）+ 公钥指纹 SHA-256。
 2. **报文联调**：构造请求（canonicalRequest → x-wop-sign / x-wop-content-digest / L2 数字信封 → curl），
    验证平台报文（摘要复核 / 验签 / L2 解密），本地模拟平台响应与回调闭环。
@@ -22,7 +22,7 @@ wop-platform 组织（GitHub 公开）已存在完整生态：
 
 | 层 | 真源 | 状态 |
 |---|---|---|
-| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，三套件冻结：RSA3072 / RSA4096 / SM2-SM3 |
+| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，四套件冻结：RSA2048 / RSA3072 / RSA4096 / SM2-SM3（RSA2048 为本期新增默认位长） |
 | SDK 契约 | wop-specs / wop-sdk-spec | **v1.0-ratified**：F3 结构化 x-wop-sign、**F6 响应/回调校验语义已冻结**（verifyCallback(headers, body, callbackPath)，顺序钉死：验签→digest 复核→DEK 解包→alg 族比对→bulk 解密）、F8 字节级向量合规 |
 | 官方 SDK | 六语言（java/go/ts/py/php/dotnet） | 4 个已支持 SM2；TS/PHP 按 Q7 裁决首版仅 RSA、国密列路线图 |
 | 技能层 | wop-skills（wop-cli 八件套 + 安全纪律 S1–S8） | 73 测试全绿，覆盖率门禁 |

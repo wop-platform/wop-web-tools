@@ -402,7 +402,7 @@ const WOP_ERRORS = {
   'OP_GW_1011': { d: 'x-wop-sign 格式错误', t: 'BIZ', s: '检查 securityReq 与 authString 的空格分隔及 <protocolVersion>/<expiredSeconds>/<signedHeaders>/<signature> 四段结构' },
   'OP_GW_1012': { d: '不支持的签名协议版本', t: 'BIZ', s: '检查 protocolVersion 是否为 v1' },
   'OP_GW_1013': { d: 'securityReq 无法识别或格式错误', t: 'BIZ', s: '检查 securityReq 是否为 WOP-<密钥算法>-<摘要算法> 结构' },
-  'OP_GW_1014': { d: '不支持的密钥算法/摘要算法或密钥长度非法', t: 'BIZ', s: '检查支持的套件组合（RSA3072/RSA4096/SM2）' },
+  'OP_GW_1014': { d: '不支持的密钥算法/摘要算法或密钥长度非法', t: 'BIZ', s: '检查支持的套件组合（RSA2048/RSA3072/RSA4096/SM2）' },
   'OP_GW_1015': { d: '签名时效参数非法（expiredSeconds 缺失/超范围）', t: 'BIZ', s: '检查 expiredSeconds 取值在 (0, 86400] 秒' },
   'OP_GW_1016': { d: 'signature 为空', t: 'BIZ', s: '检查签名串是否完整' },
   'OP_GW_1017': { d: 'signedHeaders 缺失或声明不完整', t: 'BIZ', s: '检查 signedHeaders 必含标头及 x-wop-encrypt 参与签名' },
@@ -590,7 +590,7 @@ async function buildRequest() {
   let ctx;
   try {
     const suite = $('r-suite').value;
-    if (suite === 'WOP-SM2-SM3') throw new Error(T('main.bld.sm2only', '本页请求构造仅支持 RSA 两套件；WOP-SM2-SM3 请切换到「国密」标签页（国密请求构造区，SM2 签名 + SM4-GCM 加密）'));
+    if (suite === 'WOP-SM2-SM3') throw new Error(T('main.bld.sm2only', '本页请求构造仅支持 RSA 三套件；WOP-SM2-SM3 请切换到「国密」标签页（国密请求构造区，SM2 签名 + SM4-GCM 加密）'));
     const appKey = $('r-appkey').value.trim();
     const path = $('r-path').value.trim();
     const expired = String(parseInt($('r-expired').value, 10) || 1800);
@@ -915,6 +915,13 @@ $('p-pub').addEventListener('change', async () => {
 $('import-keygen').addEventListener('click', () => {
   if (!state.pkcs8) { toast(T('main.sim.needgen', '请先在「密钥生成」页生成密钥对')); return; }
   $('m-priv').value = toPem('PRIVATE KEY', state.pkcs8);
+  // 套件与密钥位数联动：x-wop-sign 声明的套件必须与实际签名密钥位数一致，导入时自动对齐
+  const wantSuite = 'WOP-RSA' + state.bits + '-SHA256';
+  const suiteSel = $('r-suite');
+  if ([...suiteSel.options].some(o => o.value === wantSuite)) {
+    suiteSel.value = wantSuite;
+    suiteSel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
   refreshMerchantFp();
   toast(T('main.sim.imported', '已带入商户私钥'));
 });

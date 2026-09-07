@@ -11,7 +11,7 @@ Browser-side WOP merchant workbench: key generation · message interop · offlin
 
 | Tab | Capability |
 |---|---|
-| Key Generation | RSA 3072/4096 key pairs, PKCS#8/SPKI, PEM/Base64, triple self-test, public-key fingerprint |
+| Key Generation | RSA 2048/3072/4096 key pairs (2048 default), PKCS#8/SPKI, single-line Base64/PEM (single-line default), triple self-test, public-key fingerprint |
 | Message Interop | Build requests (canonical/sign/digest/L2 envelope/curl), verify platform messages, simulate response/callback loops |
 
 > Callback semantics follow the ratified `wop-sdk-spec` v1.0 (F3/F6) — verification order:
