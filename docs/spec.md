@@ -33,7 +33,7 @@
 ### 2.2 报文构造（WF4）
 
 - **WF4 构造请求**（商户 → 网关）：
-  - 输入 appKey / 请求路径 / expiredSeconds / 加密级别 L0|L2 / 安全套件 / 业务 JSON body；
+  - 输入 appKey / 请求路径 / expiredSeconds（默认 300）/ 加密级别 L0|L2 / 安全套件 / 业务 JSON body；
   - 产出 canonicalRequest（5 段 `\n`、Java URLEncoder 语义、ASCII 头排序）与
     `x-wop-sign`（`v1/<expired>/<signedHeaders>/<b64url 签名>`）、`x-wop-content-digest`（`<alg> <恰一空格> <64 位小写 hex>`）；
   - L2：AES-256-GCM 全文加密 → `{"encrypted":…}`；DEK 载荷 `AES-256-GCM$b64url(key)$b64url(iv)` 以 RSA-OAEP(SHA-256) 包装入 `x-wop-encrypt`；
@@ -48,7 +48,7 @@
   - 回调语义对齐 `verifyCallback(headers, body, callbackPath)`：canonical URI 取回调 URL 的 path
     （同步响应取网关请求路径）；
   - **迁移纠正**：源页面当前步骤顺序为「摘要复核→验签」（与 F6 相反），本条款覆盖之；
-  - 步骤级可视化（✓/✗ + 失败原因），支持「模拟平台响应/回调」闭环自测（联调密钥仅存会话内存）；
+  - 步骤级可视化（✓/✗ + 失败原因），支持「模拟平台响应/回调」闭环自测（联调密钥仅存会话内存，位数跟随商户密钥）；
   - **不保留**源页面「回调协议推演、尚未冻结」标注——回调语义已在 v1.0-ratified 冻结。
 
 ### 2.4 扩展能力（WF6+，按优先级）

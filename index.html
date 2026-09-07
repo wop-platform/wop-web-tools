@@ -128,7 +128,7 @@
           <div class="btns" style="margin-top:8px">
             <button id="gen-platform" data-i18n="main.req.genplat">生成联调平台密钥对</button>
           </div>
-          <p class="help" data-i18n="main.req.plat.help">联调模式：本地生成模拟平台密钥对（私钥仅存本次会话内存，用于「模拟平台响应」），生产环境请粘贴平台下发的真实公钥。</p>
+          <p class="help" data-i18n="main.req.plat.help">联调模式：本地生成模拟平台密钥对（位数跟随商户密钥；私钥仅存本次会话内存，用于「模拟平台响应」），生产环境请粘贴平台下发的真实公钥。</p>
         </div>
       </div>
     </section>
@@ -138,7 +138,7 @@
       <div class="grid3">
         <div class="field"><label for="r-appkey">appKey</label><input id="r-appkey" value="demo_app_key"></div>
         <div class="field"><label for="r-path" data-i18n="main.req.path">请求路径</label><input id="r-path" value="/gateway/logistics.waybill.sync"></div>
-        <div class="field"><label for="r-expired" data-i18n="main.req.expired">expiredSeconds（秒）</label><input id="r-expired" type="number" value="1800" min="1" max="86400"></div>
+        <div class="field"><label for="r-expired" data-i18n="main.req.expired">expiredSeconds（秒）</label><input id="r-expired" type="number" value="300" min="1" max="86400"></div>
       </div>
       <div class="grid3" style="margin-top:12px">
         <div class="field"><label for="r-level" data-i18n="main.req.level">加密级别</label>

@@ -593,7 +593,7 @@ async function buildRequest() {
     if (suite === 'WOP-SM2-SM3') throw new Error(T('main.bld.sm2only', '本页请求构造仅支持 RSA 三套件；WOP-SM2-SM3 请切换到「国密」标签页（国密请求构造区，SM2 签名 + SM4-GCM 加密）'));
     const appKey = $('r-appkey').value.trim();
     const path = $('r-path').value.trim();
-    const expired = String(parseInt($('r-expired').value, 10) || 1800);
+    const expired = String(parseInt($('r-expired').value, 10) || 300);
     const level = $('r-level').value;
     const plainBody = $('r-body').value;
     const host = $('r-host').value.trim().replace(/\/+$/, '');
@@ -857,10 +857,11 @@ async function simulateResponse(kind) {
       'x-wop-content-digest': 'sha-256 ' + await sha256Hex(wire),
       'x-wop-encrypt': encryptHeader
     };
-    const canonical = buildCanonical('v1/1800', 'POST', targetUri, '', canonicalHeaders(headers));
+    const expired = String(parseInt($('r-expired').value, 10) || 300);
+    const canonical = buildCanonical('v1/' + expired, 'POST', targetUri, '', canonicalHeaders(headers));
     const signKey = await importPrivSign(wopCtx.platformPriv);
     const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signKey, new TextEncoder().encode(canonical)));
-    const signHeader = $('r-suite').value + ' v1/1800/' + Object.keys(headers).sort().join(';') + '/' + b64urlFromBytes(sig);
+    const signHeader = $('r-suite').value + ' v1/' + expired + '/' + Object.keys(headers).sort().join(';') + '/' + b64urlFromBytes(sig);
 
     $('v-sign').value = signHeader;
     $('v-encrypt').value = encryptHeader;
@@ -914,7 +915,8 @@ $('p-pub').addEventListener('change', async () => {
 
 $('import-keygen').addEventListener('click', () => {
   if (!state.pkcs8) { toast(T('main.sim.needgen', '请先在「密钥生成」页生成密钥对')); return; }
-  $('m-priv').value = toPem('PRIVATE KEY', state.pkcs8);
+  // 带入格式与「密钥生成」页当前输出格式一致（默认单行 Base64；选 PKCS#8 PEM 则 PEM）
+  $('m-priv').value = $('privfmt').value === 'pkcs8' ? toPem('PRIVATE KEY', state.pkcs8) : toBase64(state.pkcs8);
   // 套件与密钥位数联动：x-wop-sign 声明的套件必须与实际签名密钥位数一致，导入时自动对齐
   const wantSuite = 'WOP-RSA' + state.bits + '-SHA256';
   const suiteSel = $('r-suite');
@@ -928,14 +930,20 @@ $('import-keygen').addEventListener('click', () => {
 
 $('gen-platform').addEventListener('click', async () => {
   try {
-    const bits = 3072;
+    // 平台密钥位数跟随商户密钥：联调页商户私钥实际模数 → 密钥生成页位数 → 套件下拉，均缺席时 2048
+    let bits = 0;
+    try {
+      const mk = await crypto.subtle.importKey('pkcs8', keyInputToDer($('m-priv').value), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+      bits = mk.algorithm.modulusLength;
+    } catch (e) { /* 商户私钥缺席或非 RSA（SM2）：走后备档位 */ }
+    if (!bits) bits = state.bits || parseInt(($('r-suite').value.match(/^WOP-RSA(\d+)-SHA256$/) || [])[1], 10) || 2048;
     const kp = await crypto.subtle.generateKey(
       { name: 'RSA-OAEP', modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
       true, ['encrypt', 'decrypt']);
     wopCtx.platformPriv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
     wopCtx.platformPubDer = new Uint8Array(await crypto.subtle.exportKey('spki', kp.publicKey));
-    $('p-pub').value = toPem('PUBLIC KEY', wopCtx.platformPubDer);
-    toast(T('main.sim.platform', '已生成联调平台密钥对（仅本会话内存）'));
+    $('p-pub').value = $('pubfmt').value === 'spki' ? toPem('PUBLIC KEY', wopCtx.platformPubDer) : toBase64(wopCtx.platformPubDer);
+    toast(T('main.sim.platform', '已生成联调平台密钥对（RSA-{bits}，仅本会话内存）', { bits }));
   } catch (e) { toast(T('main.kg.genfail', '生成失败：{msg}', { msg: e.message || e })); }
 });
 
