@@ -66,7 +66,7 @@
     var noBody = method === 'GET' || body.replace(/^\s+|\s+$/g, '') === '';
     return {
       appKey: ctx.appKey == null ? '' : String(ctx.appKey),
-      suite: val(ctx.suite, 'WOP-RSA3072-SHA256'),
+      suite: val(ctx.suite, 'WOP-RSA2048-SHA256'),
       merchantPriv: ctx.merchantPriv == null ? '' : String(ctx.merchantPriv),
       platformPub: ctx.platformPub == null ? '' : String(ctx.platformPub),
       method: method,
@@ -437,7 +437,7 @@
     var suite = sel && sel.value ? sel.value : 'auto';
     if (suite === 'auto') {
       var rs = byId('r-suite');
-      suite = rs && rs.value ? rs.value : 'WOP-RSA3072-SHA256';
+      suite = rs && rs.value ? rs.value : 'WOP-RSA2048-SHA256';
     }
     var msel = byId('wf9-method');
     return {

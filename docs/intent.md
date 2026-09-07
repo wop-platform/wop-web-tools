@@ -22,7 +22,7 @@ wop-platform 组织（GitHub 公开）已存在完整生态：
 
 | 层 | 真源 | 状态 |
 |---|---|---|
-| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，四套件冻结：RSA2048 / RSA3072 / RSA4096 / SM2-SM3（RSA2048 为本期新增默认位长） |
+| 协议 | wop-specs / crypto-strategy-spec | v0.3-reviewed，上游冻结三套件：RSA3072 / RSA4096 / SM2-SM3；RSA2048 为本工具新增默认位长（上游规范/黄金向量暂无 2048 条目，演示与自测以 TEST-ONLY 教学向量暂代） |
 | SDK 契约 | wop-specs / wop-sdk-spec | **v1.0-ratified**：F3 结构化 x-wop-sign、**F6 响应/回调校验语义已冻结**（verifyCallback(headers, body, callbackPath)，顺序钉死：验签→digest 复核→DEK 解包→alg 族比对→bulk 解密）、F8 字节级向量合规 |
 | 官方 SDK | 六语言（java/go/ts/py/php/dotnet） | 4 个已支持 SM2；TS/PHP 按 Q7 裁决首版仅 RSA、国密列路线图 |
 | 技能层 | wop-skills（wop-cli 八件套 + 安全纪律 S1–S8） | 73 测试全绿，覆盖率门禁 |

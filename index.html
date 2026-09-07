@@ -307,7 +307,7 @@
   <div class="tabpage" id="tab-selftest" hidden>
     <section class="card">
       <h2 data-i18n="main.st.h">黄金向量自测</h2>
-      <p class="inline-note" data-i18n="main.st.note">内置 wop-specs 黄金向量（fixture 只读副本，禁手改），一键跑字节级断言：正向量（摘要 / RSA 签名 / AES-GCM 密文 / DEK 载荷 / OAEP 解包）必须一致，负向量（跨族 / 格式错误 / 尾位非规范 / MGF1 陷阱）必须拒绝。全部通过才提示「与官方规格对齐」。</p>
+      <p class="inline-note" data-i18n="main.st.note">内置 wop-specs 黄金向量（fixture 只读副本，禁手改），一键跑字节级断言：正向量（摘要 / AES-GCM 密文 / DEK 载荷 / OAEP 解包）必须一致，负向量（跨族 / 格式错误 / 尾位非规范 / MGF1 陷阱）必须拒绝；rsa2048 商户签名因上游黄金向量暂无 2048 条目，以 TEST-ONLY 教学向量对拍。全部通过才显示绿色横幅（横幅含教学向量注记）。</p>
       <div class="actions">
         <button class="primary" id="run-selftest" data-i18n="main.st.run">运行自测</button>
         <span id="selftest-status" style="font-size:13px;color:var(--muted)"></span>
