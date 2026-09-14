@@ -16,3 +16,6 @@ __pycache__
 .factory/prompts/__pycache__/
 .factory/tests/__pycache__/
 .factory/mutations/__pycache__/
+
+# 本地钩子环境（gm/test.mjs 依赖 sm-crypto-v2 的构建产物依赖）
+gm/vendor/sm-crypto-v2/node_modules/
