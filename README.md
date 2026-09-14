@@ -1,6 +1,8 @@
 # WOP Web Tools
 [![CI](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/wop-platform/wop-web-tools/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/github/license/wop-platform/wop-web-tools)](LICENSE) [![Selftest](https://img.shields.io/badge/selftest-157%20assertions-brightgreen)](#自测) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/wop-platform/wop-web-tools?utm_source=oss&utm_medium=github&utm_campaign=wop-platform%2Fwop-web-tools&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
+> **WOP · 万联易达开放平台** 官方浏览器工具 —— 协议与黄金向量真源：[wop-specs](https://github.com/wop-platform/wop-specs)
+
 浏览器端 WOP 商户工作台：密钥生成 · 报文构造/验证 · 国密 SM2-SM3 · 联调辅助。
 
 - 纯静态多文件（壳 `index.html` + `assets/*`，单功能单文件），密钥在浏览器本地生成，零上传零网络请求
@@ -41,8 +43,11 @@
 - `assets/` — 页面源码真源（壳按 12 个 `defer` 脚本按序加载（+ main.css 共 13 资产）：core → 各功能切片 → selftest → boot）
 - 国密内核：`gm/gmcore.mjs`（sm-crypto-v2 审计内置，黄金向量字节级对齐）
 
-## 生态
+## 🧩 WOP 生态导航 | Ecosystem
 
-- 协议真源：[wop-specs](https://github.com/wop-platform/wop-specs)
-- 官方 SDK：六语言（java/go/ts/py/php/dotnet）
-- 技能层：[wop-skills](https://github.com/wop-platform/wop-skills)
+| 类别 | 组件 |
+|------|------|
+| 协议与向量真源 | [wop-specs](https://github.com/wop-platform/wop-specs) —— crypto-strategy-spec · wop-sdk-spec · 黄金测试向量 |
+| 官方 SDK（六语言） | [Java](https://github.com/wop-platform/wop-java-sdk) · [Go](https://github.com/wop-platform/wop-go-sdk) · [Python](https://github.com/wop-platform/wop-python-sdk) · [PHP](https://github.com/wop-platform/wop-php-sdk) · [.NET](https://github.com/wop-platform/wop-dotnet-sdk) · [TypeScript](https://github.com/wop-platform/wop-typescript-sdk) |
+| Agent 技能包 | [wop-skills](https://github.com/wop-platform/wop-skills) —— 零代码调用 · 联调对拍 · 62 错误码排错 |
+| 平台服务（企业内部） | 统一接入网关 · 核心逻辑服务 · 回调服务 · 开发者门户 · 文档中心 |
