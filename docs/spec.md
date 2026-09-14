@@ -13,7 +13,7 @@
 - [wop-specs/sdk/wop-sdk-spec.md] SDK 契约（v1.0-ratified：F3 结构化签名、**F6 响应/回调校验语义**、F8 向量合规）
 - [wop-specs/crypto/crypto-vectors.json] 黄金向量——**字节级正确性锚**（fixture 禁手改）
 - [wop-skills/SECURITY.md] 安全纪律精神（S1–S8）
-- 现有实现：`gtsp-wop-gateway/docs/tools/rsa-keygen.html`（迁移源，行为基线；**语义以真源为准**）
+- 现有实现：`内部网关仓/docs/tools/rsa-keygen.html`（迁移源，行为基线；**语义以真源为准**）
 
 ## 1. 范围
 

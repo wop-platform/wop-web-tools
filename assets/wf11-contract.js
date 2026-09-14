@@ -3,7 +3,7 @@
  * WF11 — API 目录契约数据（独立文件，清晰可替换）。
  *
  * 数据来源说明（TASK_wf11 调研结论，2026-08-31）：
- * - gtsp-wop-gateway 内无正式 OpenAPI/Swagger 契约文件（grep openapi|swagger 仅命中 .factory 工具链的云效端点，与 API 无关）；
+ * - internal-gateway 内无正式 OpenAPI/Swagger 契约文件（grep openapi|swagger 仅命中 .factory 工具链的云效端点，与 API 无关）；
  *   接口元数据运行时从平台 DB 加载（ApiInfoCache / ApiVersionDTO，apiFullPath + versionNumber）。
  * - 因此本文件为「示例契约」：接口路径风格对齐网关测试中的真实样例
  *   （GatewayFilterChainHarness: logistics/open-plat/waybill-query；
@@ -54,7 +54,7 @@
       description: '物流轨迹服务开放接口。网关统一 POST 接入：POST {server}/gateway/{apiPath}'
     },
     servers: [
-      { url: 'https://gateway.example.com/gtsp-wop-gateway', description: '网关统一入口（context-path 实证为 /gtsp-wop-gateway）' }
+      { url: 'https://gateway.example.com/gateway', description: '网关统一入口（context-path 实证为 /gateway）' }
     ],
     tags: [
       { name: '运单', description: '运单基础信息查询' },

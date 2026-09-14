@@ -43,7 +43,7 @@ export const DIGEST_ALG_SM = 'sm3';
 // DEK 载荷格式：key16→b64u 22 字符，iv12→b64u 16 字符（均无填充）
 const DEK_PAYLOAD_RE = /^SM4-GCM\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{16}$/;
 
-// 黄金向量（TEST-ONLY 固定 k/固定 IV；唯一事实源 gtsp-wop-gateway/docs/crypto-vectors.json，
+// 黄金向量（TEST-ONLY 固定 k/固定 IV；唯一事实源 wop-specs/crypto/crypto-vectors.json，
 // 由集成者字节级验证后写入任务书，直接采信）
 export const GOLDEN_SM = {
   message: 'WOP 跨语言测试向量 2026-08-28 — The quick brown fox jumps over the lazy dog.',

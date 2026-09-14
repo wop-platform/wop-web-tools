@@ -1,7 +1,7 @@
 # WFgm — 国密 WOP-SM2-SM3 套件切片
 
 WOP 网关国密套件（SM2 签名/信封 + SM3 摘要 + SM4-GCM 报文加密）的纯函数核心与页面切片。
-黄金向量源自 `gtsp-wop-gateway/docs/crypto-vectors.json`。
+黄金向量源自 `wop-specs/crypto/crypto-vectors.json`。
 
 ## 产物
 
