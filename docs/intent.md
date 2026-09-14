@@ -4,7 +4,7 @@
 
 ## 1. 缘起
 
-`gtsp-wop-gateway`（codeup 内部仓）`docs/tools/rsa-keygen.html` 是一个纯静态单文件工具，
+`内部网关仓`（codeup 内部仓）`docs/tools/rsa-keygen.html` 是一个纯静态单文件工具，
 两个能力已被商户实际使用：
 
 1. **密钥生成**：RSA 2048/3072/4096 密钥对（默认 2048；Web Crypto 本地生成，零上传），PKCS#8/SPKI、单行 Base64/PEM（默认单行），

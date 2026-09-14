@@ -226,7 +226,7 @@ if (!window.crypto || !crypto.subtle) {
 
 /* ================================================================
  * Tab 2：WOP 报文联调
- * 协议与 gtsp-wop-gateway 对齐：
+ * 协议与 internal-gateway 对齐：
  *   canonical = authString \n METHOD \n path \n queryString \n canonicalHeaders
  *   签名 SHA256withRSA → base64url 无填充；DEK 包装 RSA-OAEP(SHA-256/MGF1-SHA-256)
  *   DEK 载荷 "AES-256-GCM$base64url(key)$base64url(iv)"；密文 base64url(GCM ct‖tag)
