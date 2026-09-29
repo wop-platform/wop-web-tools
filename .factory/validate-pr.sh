@@ -17,11 +17,7 @@ if [ -z "${PR}" ]; then
   echo "用法: $0 <pr-number> [--dry-run]" >&2; exit 2
 fi
 
-# 加载共享库（omp_node/node 预算等定义于此；评论 13：此前 validate-pr 未
-# source，非 dry-run 的 omp_node 调用 command not found 触发 fail）。
-# 约定同 fix-issue.sh：REPO 解析后 source，函数体内才求值 ISSUE 等状态变量。
 REPO="$(git rev-parse --show-toplevel)"
-source "${REPO}/.factory/factory-lib.sh"
 DIR="${REPO}/.factory/artifacts/pr-${PR}"
 node_timeout() { python3 "${REPO}/.factory/factory_lib.py" timeout "$1"; }  # 分级预算：评审15m/holdout 5m
 HOST="python3 ${REPO}/.factory/hosting.py"
@@ -73,12 +69,14 @@ if [ "${DRY}" = 0 ]; then
       fail docstring "docstring 门失败（详见 ${DIR}/docstring-output.txt）" 1
     fi
   fi
-  for suite in $(python3 "${REPO}/.factory/factory_lib.py" suites "${CHANGED[@]}"); do
+  # NUL 分隔消费（PR #116）：套件名可含空格（skills/foo bar/...），for 词拆分
+  # 会拆碎名致证据段静默跳过；suites 产出 NUL → read -d '' 逐条保真
+  while IFS= read -r -d '' suite; do
     [ -d "${REPO}/${suite}" ] || continue
     echo "" >> "${DIR}/tests-output.txt"
     echo "── 证据段（verbose）: ${suite}" >> "${DIR}/tests-output.txt"
     (cd "${REPO}/${suite}" && python3 -m pytest -o addopts="" -v) >> "${DIR}/tests-output.txt" 2>&1 || true
-  done
+  done < <(python3 "${REPO}/.factory/factory_lib.py" suites "${CHANGED[@]}")
 else
   echo "[dry-run] 测试门（final_gate_cmd） → ${DIR}/tests-output.txt + 证据段"
   echo "[dry-run] docstring 门（docstring_gate_cmd，未配置则跳过） → ${DIR}/docstring-output.txt"

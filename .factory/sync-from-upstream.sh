@@ -30,21 +30,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 UP="${1:-}"; MODE="check"; ANCHOR=""; REPO_ARG=""; COMMIT=0
 [ -n "$UP" ] || { sed -n '2,26p' "$0" >&2; exit 2; }
 shift
-# 评论 20：入参可为 URL（https://… / git@host:path）——机器路径写进
-# upstream-lock.json 会泄漏用户名/目录结构且他机不可用（PR #7 评审实证：
-# 锁内曾落 /Users/dreambt/...）。URL 形态物化为临时裸克隆（克隆失败 =
-# 上游不可用，exit 2 契约不变），下游 git -C "$UP" 逻辑零改动；
-# 锁与摘要始终引用原始 URL（UP_SRC），物化临时目录绝不入锁。
-UP_SRC="$UP"
-case "$UP" in
-  *://*|git@*:*)
-    UP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/factory-upstream.XXXXXX")"
-    git clone -q --bare "$UP_SRC" "$UP_DIR" \
-      || { echo "上游 URL 克隆失败（HTTPS 需网络；git@ 需 SSH 凭据）: $UP_SRC" >&2
-           rm -rf "$UP_DIR"; exit 2; }
-    UP="$UP_DIR"
-    ;;
-esac
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) MODE="check" ;;
@@ -75,7 +60,7 @@ LOCKFILE="$FACTORY/upstream-lock.json"
 
 # 上游可用性（bare 仓无工作树，一律经 git 对象库读）
 git -C "$UP" rev-parse --git-dir >/dev/null 2>&1 \
-  || { echo "上游仓不可用: $UP_SRC" >&2; exit 2; }
+  || { echo "上游仓不可用: $UP" >&2; exit 2; }
 
 # --commit 前置脏检查（fail-closed）：目标仓 .factory 有未提交 tracked 改动
 # 即拒绝——自动提交会淹没热修；热修正道是先落库或走 feedback-upstream 反哺
@@ -86,6 +71,22 @@ if [ "$MODE" = apply ] && [ "$COMMIT" = 1 ]; then
     printf '%s\n' "$dirty" >&2
     exit 1
   }
+  # 提交阶段会无条件 git add 根目录 .git-blame-ignore-revs（blame 消噪
+  # 清单，不在 .factory 面）——其 tracked 修改或人工 untracked 内容会被
+  # 并入同步提交而淹没本地改动（Sourcery PR#14 评论 2）。放行仅限脚本
+  # 首建残留：untracked 单行注释头（设计随下一次真追平的 add 一并入库，
+  # PR #105 评论 1 锚定）；tracked 改动 / staged / 人工 untracked 均拒绝
+  ignore_state="$(git -C "$REPO" status --porcelain -- .git-blame-ignore-revs || true)"
+  if [ -n "$ignore_state" ]; then
+    IGNORE_FILE="$REPO/.git-blame-ignore-revs"
+    if ! { printf '%s\n' "$ignore_state" | grep -q '^?? ' \
+        && [ -f "$IGNORE_FILE" ] \
+        && cmp -s "$IGNORE_FILE" <(printf '%s\n' '# factory: 追平提交忽略清单（git blame --ignore-revs 消噪）'); }; then
+      echo "拒绝 --commit：目标仓 .git-blame-ignore-revs 有未提交改动（先落库或反哺）:" >&2
+      printf '%s\n' "$ignore_state" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # 锚点解析：--anchor > 上次 lock > main（优先级左→右；下游迁移
@@ -103,22 +104,21 @@ fi
 git -C "$UP" rev-parse --verify -q "$ANCHOR^{commit}" >/dev/null \
   || { echo "上游锚点不可解析: $ANCHOR" >&2; exit 2; }
 HEAD_SHA="$(git -C "$UP" rev-parse "$ANCHOR^{commit}")"
-echo "上游: ${UP_SRC} @ ${ANCHOR} (${HEAD_SHA:0:9})"
+echo "上游: ${UP} @ ${ANCHOR} (${HEAD_SHA:0:9})"
 
 # 分发清单——从**上游**对象库读（下游本地副本可能滞后甚至缺失；
 # 清单是上游主权，锚点即版本）。无清单=上游版本旧，全部按 local。
 # 展开逻辑在 factory_lib.py dist-manifest（2026-08-28 自此处 heredoc 下沉，
 # 铁律 4：git 子进程编排归 Python；无清单=空输出，警告走 stderr）
-# 评论 25：可预测 /tmp 路径存在符号链接劫持面（CWE-377）——mktemp 原子
-# 创建（STAGE_FILE 由 mktemp 创建后无需再 : > 截断）
 DIST_FILE="$(mktemp "${TMPDIR:-/tmp}/.factory-dist.XXXXXX")"
-STAGE_FILE="$(mktemp "${TMPDIR:-/tmp}/.factory-stage.XXXXXX")"
 # EXIT trap 兜底清理：Sourcery 拒绝、git 失败等 set -e 中途退出不泄漏
 # /tmp 暂存文件（PR #105 评论 3）——正常退出同样兜底，显式 rm 不再需要。
+# trap 紧随首个 mktemp 安装（PR #120 review 1）：第二个 mktemp（STAGE_FILE）
+# 失败时首个暂存不再泄漏。未达定义处的变量以 :- 防 set -u 中断 trap。
 # tmp = apply 循环 tmp+mv 的中转文件（#103）：中断即清；未入循环时未定义，
-# set -u 下 :- 防 unbound（rm -f 空串为无害 no-op）。UP_DIR = 评论 20 的
-# URL 物化目录（未物化时未定义，:- 兜底 no-op）
-trap 'rm -f "$DIST_FILE" "$STAGE_FILE" "${tmp:-}"; [ -n "${UP_DIR:-}" ] && rm -rf "$UP_DIR"' EXIT
+# set -u 下 :- 防 unbound（rm -f 空串为无害 no-op）
+trap 'rm -f "$DIST_FILE" "${STAGE_FILE:-}" "${tmp:-}"' EXIT
+STAGE_FILE="$(mktemp "${TMPDIR:-/tmp}/.factory-stage.XXXXXX")"
 python3 "$SCRIPT_DIR/factory_lib.py" dist-manifest "$UP" "$HEAD_SHA" > "$DIST_FILE"
 
 # Sourcery 回归闸（2026-08-31 事故锚：追平所取上游快照早于下游已修复版，
@@ -145,8 +145,22 @@ _sr_clean() {  # 0=干净 1=有 issue 2=CLI 异常
 SR_GATE_ON=0
 if [ "$MODE" = apply ] && command -v sourcery >/dev/null 2>&1; then
   SR_GATE_ON=1
-  _sr_clean && echo "Sourcery 回归闸基线: .factory 干净" \
-            || { echo "Sourcery 回归闸基线: .factory 已有 issue——先清零再追平（闸口径=PR gate）" >&2; exit 2; }
+  # 版本口径提示（issue #104）：本地 CLI 版本与上游 CI pin 不一致时，
+  # 上游已清零的快照本地可报 issue——先排除口径差异再查真实回归。
+  # rc 区分（Sourcery 审查）：1=有 issue（才可能是版本口径差异）；
+  # ≥2=CLI 执行失败，误诊为版本漂移会误导排查
+  if _sr_clean; then
+    echo "Sourcery 回归闸基线: .factory 干净"
+  else
+    sr_status=$?
+    if [ "$sr_status" -eq 1 ]; then
+      echo "Sourcery 回归闸基线: .factory 已有 issue——先清零再追平（闸口径=PR gate）。" \
+           "若上游 CI 曾全绿：疑似本地 CLI 版本口径差异（本地 $(sourcery --version 2>/dev/null || echo '?') vs 上游 sourcery-review-gate.yml 的 pin），对齐版本后复跑再定" >&2
+    else
+      echo "Sourcery 回归闸执行失败（CLI 异常，退出码=$sr_status）——请检查本地 CLI 后重试" >&2
+    fi
+    exit 2
+  fi
 fi
 
 # 上游 mode+blob（git show 丢 mode，覆盖后须恢复执行位）
@@ -171,11 +185,11 @@ while IFS=$'\t' read -r kind rel; do
     echo "  [$kind] $rel: 本地缺失"
     [ "$kind" = full ] && DRIFT=1
     if [ "$MODE" = apply ] && [ "$kind" = full ]; then
-      mkdir -p "$(dirname "$dst")" # 缺失父目录先建（wop-skills：tests/ 整缺，重定向即崩）
+      mkdir -p "$(dirname "$dst")" # 缺失父目录先建（xx-skills：tests/ 整缺，重定向即崩）
       # tmp+mv 原子替换（#103）：$dst 可能是运行中脚本自身——bash 惰性逐段
       # 读源文件，`> "$dst"` 直写截断同 inode，旧读位移落在新内容中途即
       # syntax error 半同步态；同目录 rename 换 inode，旧 inode 保活至跑完
-      tmp="$dst.factory-new.$$"
+      tmp="$(mktemp "${dst}.factory-new.XXXXXX")"
       git -C "$UP" cat-file blob "$up_blob" > "$tmp" && mv -f "$tmp" "$dst" \
         || { echo "  [$kind] $rel: 上游 blob 拉取失败" >&2; exit 2; }
       chmod "${up_mode: -3}" "$dst" 2>/dev/null || chmod +x "$dst"
@@ -192,7 +206,7 @@ while IFS=$'\t' read -r kind rel; do
     DRIFT=1
     if [ "$MODE" = apply ]; then
       # 同 fill-in：tmp+mv 原子替换（#103）——漂移覆盖恰是自覆盖的主形态
-      tmp="$dst.factory-new.$$"
+      tmp="$(mktemp "${dst}.factory-new.XXXXXX")"
       git -C "$UP" cat-file blob "$up_blob" > "$tmp" && mv -f "$tmp" "$dst" \
         || { echo "  [full] $rel: 上游 blob 拉取失败" >&2; exit 2; }
       chmod "${up_mode: -3}" "$dst" 2>/dev/null || chmod +x "$dst"
@@ -235,9 +249,8 @@ if [ "$MODE" = apply ]; then
   # anchor 未变而无 upstream 时，upstream-sync-check.sh 永缺上游凭据
   old_anchor="$(_lock_field anchor)"
   old_upstream="$(_lock_field upstream)"
-  # 评论 20：upstream 字段写原始 URL（UP_SRC）——物化目录路径绝不入锁
-  if [ "$APPLIED" -gt 0 ] || [ "$old_anchor" != "$HEAD_SHA" ] || [ "$old_upstream" != "$UP_SRC" ]; then
-    python3 - "$LOCKFILE" "$HEAD_SHA" "$UP_SRC" <<'PY'
+  if [ "$APPLIED" -gt 0 ] || [ "$old_anchor" != "$HEAD_SHA" ] || [ "$old_upstream" != "$UP" ]; then
+    python3 - "$LOCKFILE" "$HEAD_SHA" "$UP" <<'PY'
 import json, sys, pathlib, datetime
 p = pathlib.Path(sys.argv[1])
 p.write_text(json.dumps({
