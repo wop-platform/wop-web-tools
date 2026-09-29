@@ -29,9 +29,8 @@
   ],
   "review_basis": "docs/spec.md（条款 → 断言反向核对矩阵 §5.1）+ 既有检查器形态（dom_check / scan_banned / gm 黄金向量）",
   "final_gate_cmd": "scripts/run_tests.sh --no-lock",
-  "upstream_repo": "im47cn/awesome-rules",
-  "upstream_path": "~/sources/awesome-rules",
-  "feedback_branch_prefix": "feedback/wop-web-tools"
-,
+  "upstream_repo": "im47cn/awesome-factory",
+  "upstream_path": "~/sources/awesome-factory",
+  "feedback_branch_prefix": "feedback/wop-web-tools",
   "port_point": "059727e5cebec82f37a8ce79c6f0e1da1358e9f3"
 }
