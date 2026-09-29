@@ -2,7 +2,8 @@
 # downstream-check.sh — 中心仓对下游仓清单的集中巡检/追平。
 #
 # 定位：替代「逐仓手工追平」。中心仓是工具链主权方（三态分发）；
-# 本脚本读 .factory/downstream.json（skip 态清单，仓特定数据），对每个
+# 本脚本读下游仓清单（ADR-012：真实清单住 downstream.local.json，gitignored；
+# tracked downstream.json 仅空模板），对每个
 # 下游仓调**中心版** sync-from-upstream.sh——下游副本滞后/缺失也照常
 # 工作（鸡生蛋免疫）；巡检一律以中心仓 main 为锚（发布线，非工作分支）。
 #
@@ -16,16 +17,25 @@
 # 进程已死自动清锁重试一次（照抄 cron-dispatch 语义）。
 #
 # 首次移植的新仓不入本清单——先走 README「移植到其他仓库」四步，
-# 再由人工登记进 downstream.json。
+# 再由人工登记进 downstream.local.json（gitignored，ADR-012——勿写
+# tracked 模板，那正是 ADR-012 要杜绝的污染路径）。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CENTER="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST="$SCRIPT_DIR/downstream.json"
+# ADR-012：真实清单住 downstream.local.json（gitignored 仓特定数据）；
+# tracked 模板仅文档占位，local 存在则优先
+LOCAL_MANIFEST="$SCRIPT_DIR/downstream.local.json"
+[ -f "$LOCAL_MANIFEST" ] && MANIFEST="$LOCAL_MANIFEST"
 SYNC="$SCRIPT_DIR/sync-from-upstream.sh"
 LOCK="$SCRIPT_DIR/locks/downstream-check.lock"
-# 评论 25：可预测 /tmp 路径存在符号链接劫持面（CWE-377）——mktemp 原子创建
 OUT_FILE="$(mktemp "${TMPDIR:-/tmp}/.factory-downstream-check.XXXXXX")"
+# EXIT trap 紧随 mktemp 安装（PR #120 review 1）：用法错误/清单缺失损坏/
+# 锁竞争等早退路径此前落在 trap 之前会泄漏 /tmp 暂存。此处先只清
+# OUT_FILE——LOCK 尚未到手（竞争退出路径里 lock 文件属于对方实例），
+# 不能一并 rm，须持锁成功后再并入（下方第二段 trap 整体替换本段）
+trap 'rm -f "$OUT_FILE"' EXIT INT TERM
 
 MODE="check"
 while [ $# -gt 0 ]; do
@@ -50,28 +60,24 @@ for r in rows:
     if not isinstance(r, dict) or not isinstance(r.get("path"), str) or not r["path"].strip():
         sys.exit(1)
     print(r["path"])' "$MANIFEST" 2>/dev/null)" \
-  || { echo "下游清单损坏（需非空 repos[].path）: $MANIFEST" >&2; exit 2; }
+  || { _hint="——真实清单写 .factory/downstream.local.json（gitignored，ADR-012）"
+     case "$MANIFEST" in *downstream.local.json) _hint="——修复或删除该 local 清单（它已在 ADR-012 载体位）";; esac
+     echo "下游清单损坏（需非空 repos[].path）: $MANIFEST $_hint" >&2; exit 2; }
 
 mkdir -p "$SCRIPT_DIR/locks"  # 净克隆首跑：gitignored 目录缺失时 shlock ENOENT 被误读为锁被持
-# 评论 16：shlock 缺失时 shell 返回 127、OPID 为空走 else——本脚本会静默
-# exit 0 假成功（巡检永不跑）。环境缺互斥工具 = fail-closed exit 2。
-if ! command -v /usr/bin/shlock >/dev/null 2>&1; then
-  echo "downstream-check: shlock 不可用（macOS 自带工具缺失）——互斥不可靠，fail-closed 退出" >&2
-  exit 2
-fi
 if ! /usr/bin/shlock -f "$LOCK" -p $$; then
   OPID="$(cat "$LOCK" 2>/dev/null || :)"
   if [ -n "$OPID" ] && ! kill -0 "$OPID" 2>/dev/null; then
     rm -f "$LOCK"
     /usr/bin/shlock -f "$LOCK" -p $$ || { echo "巡检锁被持，退出（另一实例运行中）" >&2; exit 0; }
-  elif [ -z "$OPID" ]; then
-    # 锁文件在而 PID 不可读（损坏/权限）——不静默假成功，留人工清理
-    echo "downstream-check: 锁文件 ${LOCK} 存在但 PID 不可读——stale/corrupt，人工清理" >&2
-    exit 2
   else
     echo "巡检锁被持，退出（另一实例运行中）" >&2; exit 0
   fi
 fi
+
+# 走到这里必已持锁（初试成功，或 stale 清锁后重试成功；竞争两分支均已
+# exit 0）——此时才把 LOCK 并入清理 trap，整体替换上面只清 OUT_FILE 的
+# 首段（PR #120 review 1 修正：早并入会在竞争退出时删对方锁，破坏互斥）
 trap 'rm -f "$LOCK" "$OUT_FILE"' EXIT INT TERM
 
 # 清单路径 → 绝对路径（~/ 展开；相对路径以中心仓根为基准）
